@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { tasksApi } from '../api';
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: '低', color: 'var(--priority-low)' },
@@ -33,6 +34,8 @@ export default function TaskForm({ task, tags, onSubmit, onCancel }) {
     subtasks: [],
   });
   const [newSubtask, setNewSubtask] = useState('');
+  const [notes, setNotes] = useState([]);
+  const [newNote, setNewNote] = useState('');
 
   useEffect(() => {
     if (task) {
@@ -47,6 +50,9 @@ export default function TaskForm({ task, tags, onSubmit, onCancel }) {
         tags: task.tags?.map((t) => t.id) || [],
         subtasks: [],
       });
+      tasksApi.listNotes(task.id)
+        .then(setNotes)
+        .catch((err) => console.error('Failed to load notes:', err));
     }
   }, [task]);
 
@@ -86,6 +92,17 @@ export default function TaskForm({ task, tags, onSubmit, onCancel }) {
       ...prev,
       subtasks: prev.subtasks.filter((_, i) => i !== index),
     }));
+  };
+
+  const handleAddNote = async () => {
+    if (!newNote.trim() || !task) return;
+    try {
+      const addedNote = await tasksApi.addNote(task.id, newNote.trim(), 'user');
+      setNotes((prev) => [addedNote, ...prev]);
+      setNewNote('');
+    } catch (error) {
+      console.error('Failed to add note:', error);
+    }
   };
 
   return (
@@ -217,6 +234,47 @@ export default function TaskForm({ task, tags, onSubmit, onCancel }) {
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+          )}
+
+          {/* History / Notes - only on edit */}
+          {task && (
+            <div className="form-group task-history">
+              <label>任务进度与纪要</label>
+              
+              <div className="subtask-input-row" style={{marginBottom: '1rem'}}>
+                <input
+                  type="text"
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="追加一条手写进度或备注..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddNote();
+                    }
+                  }}
+                />
+                <button type="button" className="btn btn-sm btn-ghost" onClick={handleAddNote}>
+                  记录
+                </button>
+              </div>
+
+              {notes.length > 0 ? (
+                <ul className="notes-list" style={{listStyle: 'none', padding: 0, margin: 0, fontSize: '0.85rem'}}>
+                  {notes.map((note) => (
+                    <li key={note.id} style={{marginBottom: '10px', padding: '8px', background: 'var(--surface-color)', borderRadius: '6px', borderLeft: note.source==='ai' ? '3px solid var(--tag-blue)' : '3px solid var(--text-muted)'}}>
+                      <div className="note-meta" style={{display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', marginBottom: '4px'}}>
+                        <span className="note-source">{note.source === 'ai' ? '🤖 Agent' : '👤 You'}</span>
+                        <span className="note-time">{new Date(note.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <div className="note-content" style={{color: 'var(--text-color)'}}>{note.content}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="no-notes-text" style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>暂时没有历史记录。</p>
               )}
             </div>
           )}
