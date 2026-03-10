@@ -59,6 +59,29 @@ def create_task(title: str, priority: str = 'medium', due_date: Optional[str] = 
     except Exception as e:
         return json.dumps({"error": str(e)})
 
+def update_task(task_id: int, title: Optional[str] = None, priority: Optional[str] = None, 
+                due_date: Optional[str] = None, recurrence: Optional[str] = None) -> str:
+    """更新已有任务的基本信息（标题、优先级、截止日期等）。如果要更新状态或子任务，推荐使用 add_task_progress_note。"""
+    payload: Dict[str, Any] = {}
+    if title is not None:
+        payload["title"] = title
+    if priority is not None:
+        payload["priority"] = priority
+    if due_date is not None:
+        payload["due_date"] = due_date
+    if recurrence is not None:
+        payload["recurrence"] = recurrence
+
+    if not payload:
+        return json.dumps({"error": "No fields to update provided."})
+
+    try:
+        response = requests.put(f"{BASE_URL}/tasks/{task_id}", json=payload)
+        response.raise_for_status()
+        return f"Task updated successfully. Details: {json.dumps(response.json(), ensure_ascii=False)}"
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
 def add_task_progress_note(task_id: int, note_content: str, complete_subtasks: Optional[List[int]] = None, task_status: Optional[str] = None) -> str:
     """当用户口头报告了任务的进展、障碍时，调用此工具将记录附加到任务上，并可选地勾选子任务或更新主任务状态。
     - task_id: 任务的数字ID。
@@ -138,6 +161,24 @@ OPENCLAW_TOOLS_SCHEMA = [
                     }
                 },
                 "required": ["title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_task",
+            "description": "更新已存在任务的基本信息（如标题、优先级、重复频率、截止日期等）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "integer", "description": "需要更新的任务ID"},
+                    "title": {"type": "string", "description": "新的标题名称"},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"]},
+                    "due_date": {"type": "string", "description": "新的截止日期，格式 YYYY-MM-DD"},
+                    "recurrence": {"type": "string", "enum": ["none", "daily", "weekly", "monthly"]}
+                },
+                "required": ["task_id"]
             }
         }
     },
