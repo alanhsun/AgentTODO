@@ -20,7 +20,8 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Server dependencies (production only)
 COPY server/package.json server/package-lock.json* ./server/
-RUN cd server && npm ci --omit=dev 2>/dev/null || npm install --omit=dev \
+RUN apk add --no-cache python3 make g++ \
+    && cd server && npm ci --omit=dev 2>/dev/null || npm install --omit=dev \
     && npm cache clean --force
 
 # Server source
