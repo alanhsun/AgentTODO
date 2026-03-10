@@ -7,6 +7,7 @@ const taskRoutes = require('./routes/tasks');
 const subtasksNotesRoutes = require('./routes/subtasks-notes');
 const tagRoutes = require('./routes/tags');
 const webhookRoutes = require('./routes/webhooks');
+const backupRoutes = require('./routes/backup');
 
 // Load OpenAPI spec
 let swaggerDocument = null;
@@ -24,7 +25,7 @@ const app = express();
 
 // Middleware
 app.use(cors({ origin: config.corsOrigin }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -48,6 +49,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/tasks', subtasksNotesRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/backup', backupRoutes);
 
 // Serve static files in production
 const clientBuildPath = path.join(__dirname, '..', '..', 'client', 'dist');

@@ -46,3 +46,10 @@ export const tagsApi = {
   update: (id, body) => request(`/tags/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   delete: (id) => request(`/tags/${id}`, { method: 'DELETE' }),
 };
+
+// Backup
+export const backupApi = {
+  export: () => request('/backup/export'),
+  import: (body) => request('/backup/import', { method: 'POST', body: JSON.stringify(body) }),
+};
+

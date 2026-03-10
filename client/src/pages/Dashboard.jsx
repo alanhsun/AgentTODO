@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react';
-import { tasksApi } from '../api';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { tasksApi, backupApi } from '../api';
 import { useTasks, useTags } from '../hooks/useTasks';
 import TaskCard from '../components/TaskCard';
 import TaskForm from '../components/TaskForm';
@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [batchLoading, setBatchLoading] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'kanban'
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -91,6 +92,45 @@ export default function Dashboard() {
     setFilters((prev) => ({ ...prev, page }));
   };
 
+  const handleExport = async () => {
+    try {
+      const data = await backupApi.export();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `agenttodo-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch(err) {
+      alert('导出备份失败: ' + err.message);
+    }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        if(!confirm('确定要导入这个备份文件吗？这将覆盖当前的所有数据。')) {
+          e.target.value = null;
+          return;
+        }
+        await backupApi.import(data);
+        alert('导入成功');
+        window.location.reload();
+      } catch(err) {
+        alert('导入失败: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = null; // reset
+  };
+
   // Summary counts (use kanban tasks when in kanban or calendar mode for accurate totals)
   const activeTasks = (viewMode === 'kanban' || viewMode === 'calendar') ? kanbanTasks : tasks;
   const todoCnt = activeTasks.filter((t) => t.status === 'todo').length;
@@ -143,7 +183,14 @@ export default function Dashboard() {
         <div className="sidebar-footer">
           <div className="user-info">
             <div className="user-avatar">📋</div>
-            <span className="user-name">本地用户</span>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span className="user-name">本地用户</span>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <button className="btn-icon-sm" onClick={handleExport} title="导出全量备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导出</button>
+                <button className="btn-icon-sm" onClick={() => fileInputRef.current?.click()} title="导入全量备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导入</button>
+                <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" style={{ display: 'none' }} />
+              </div>
+            </div>
           </div>
         </div>
       </aside>
