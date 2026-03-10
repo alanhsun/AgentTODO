@@ -18,10 +18,30 @@
 
 ## 阶段二：给 AI 安装“机械手臂”（添加技能插件） 🦾
 
-AI 需要你的授权才能读写你的任务列表。在 OpenClaw 中，这通常叫做 **工具 (Tools)**、**技能 (Skills)** 或 **功能调用 (Function Calling)**。
+AI 需要你的授权才能读写你的任务列表。根据你使用的 AI 平台，这通常被称为 **MCP Server** 或 **工具 (Tools) / 技能 (Skills)**。
 
-请在 OpenClaw 的 **工具配置 / 插件管理** 界面，添加以下 5 个技能。
-*注意：如果你的 OpenClaw 支持直接导入 JSON 描述文件，你可以直接复制底下代码块的内容。对于不需要代码配置的界面，只需照着下方的描述填空即可。*
+### 🌟 推荐方式 A：使用 MCP 协议 (零代码一键接入)
+如果你使用的是支持 MCP (Model Context Protocol) 的现代 AI 客户端（如 Claude Desktop, Cursor, Zed 等），接入将没有任何难度：
+1. 找到你客户端的 MCP 配置文件（如 `claude_desktop_config.json`）。
+2. 在里面添加一条 Server 配置指向你的本地脚本，然后重启即可：
+   ```json
+   {
+     "mcpServers": {
+       "agenttodo": {
+         "command": "node",
+         "args": ["/你的绝对路径/AgentTODO/server/src/mcp.js"]
+       }
+     }
+   }
+   ```
+配置完成后，AI 将立刻自动拥有所有的读写能力和调用规范，你可以**直接跳过方式 B！**
+
+---
+
+### ⚙️ 方式 B：传统 REST API 手动配置 (适用于 OpenClaw / Coze / Dify 等)
+
+如果你的 AI 不支持 MCP，请在其 **工具配置 / 插件手动管理** 界面，逐一添加以下 6 个 API 技能。
+*注意：对于支持 JSON 导入的系统，你可以直接把本目录底下的 `openclaw_tools.py` 里的 `OPENCLAW_TOOLS_SCHEMA` 数组直接复制给它用。*
 
 ### 技能 1：获取每日概览 (get_daily_summary)
 *   **名称 (Name)**: `get_daily_summary`

@@ -1,9 +1,25 @@
 # AgentTODO API — AI Agent 接口规范
 
-> 本文档专门为 AI Agent / LLM 工具调用 AgentTODO API 而编写。
-> 无需认证，所有端点均可直接调用。
+> 本文档专门为 AI Agent / LLM 工具调用 AgentTODO 而编写。
+> 提供基于 JSON Schema 的原生 HTTP REST API，以及通用的 MCP Server 支持。
 
-## 连接信息
+## 🔌 选项一：通过 MCP 接入（强烈推荐）
+
+如果你的 Agent 工具支持 MCP (Model Context Protocol)，这是最轻量和最原生的方式。你无需在此查阅任何 REST API 接口文档。
+
+直接在配置文件中挂载：
+```json
+{
+  "agenttodo": {
+    "command": "node",
+    "args": ["/你的项目绝对路径/AgentTODO/server/src/mcp.js"]
+  }
+}
+```
+
+## 🌐 选项二：使用传统 REST API
+
+### 连接信息
 
 - Base URL: `http://localhost:3300`（根据实际部署地址修改）
 - Content-Type: `application/json`
@@ -11,7 +27,7 @@
 
 ---
 
-## API 端点速查
+### API 端点速查
 
 | 方法   | 路径                          | 用途             |
 |--------|-------------------------------|-----------------|

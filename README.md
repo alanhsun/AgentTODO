@@ -11,6 +11,22 @@
 ## ✨ 核心特性
 
 - 🤖 **AI Native API**：提供为 LLM 专门优化的端点（如 `/api/tasks/summary`、`/api/tasks/today`），AI 启动时可一键获取今日待办大盘与逾期警告。
+
+### 🔌 第三方 MCP 生态支持 (最新特性！)
+我们为 AgentTODO 内置了原生的 Model Context Protocol (MCP) Server 支持方案！如果你使用的是支持 MCP 的智能体（例如 Claude Desktop，Cursor 等），完全不需要手动配置一大堆 JSON Schema。
+你只需要配置连接本地运行中的 MCP Server 脚本：
+
+```json
+{
+  "mcpServers": {
+    "agenttodo": {
+      "command": "node",
+      "args": ["/绝对路径/你的项目目录/server/src/mcp.js"]
+    }
+  }
+}
+```
+**挂载后 AI 将获得直接理解、读写您的任务大盘的原生超能力！**🌟
 - 🔓 **本地私有化 (Zero-Auth)**：专为本地受信任网络设计，去除了繁琐的 JWT 用户注册与登录，大模型及脚本直接调用无缝集成。
 - 🔄 **周期任务 & 子任务分解**：支持设置每日/每周重复习惯。当你对 AI 说“我要规划一次旅行”时，AI 可直接调用接口在该大任务下无限拆分具体子步骤并主动追踪。
 - 🔔 **Webhook 主动推送支持**：内置 Node-Cron 定时任务扫描。当你的任务逾期未办理时，可主动向 AI 系统（如 OpenClaw）发送 HTTP Push，让机器来“催”你办事！
