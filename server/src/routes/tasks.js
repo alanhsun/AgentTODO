@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../db');
 const { validateTaskInput, validateBatchInput } = require('../validators/task');
+const { triggerWebhook } = require('../services/webhookService');
 
 const router = express.Router();
 
@@ -255,7 +256,10 @@ router.post('/', async (req, res) => {
       .where('task_tags.task_id', id)
       .select('tags.id', 'tags.name', 'tags.color');
 
-    res.status(201).json({ ...task, tags: taskTagsResult });
+    const createdTask = { ...task, tags: taskTagsResult };
+    triggerWebhook('task.created', createdTask);
+    
+    res.status(201).json(createdTask);
   } catch (err) {
     console.error('POST /tasks error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -324,7 +328,10 @@ router.put('/:id', async (req, res) => {
       .where('task_tags.task_id', req.params.id)
       .select('tags.id', 'tags.name', 'tags.color');
 
-    res.json({ ...updated, tags });
+    const finalUpdatedTask = { ...updated, tags };
+    triggerWebhook('task.updated', finalUpdatedTask);
+
+    res.json(finalUpdatedTask);
   } catch (err) {
     console.error('PUT /tasks/:id error:', err);
     res.status(500).json({ error: 'Internal server error' });

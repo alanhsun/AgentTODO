@@ -35,6 +35,8 @@
 | POST   | /api/tags                     | 创建标签         |
 | PUT    | /api/tags/:id                 | 更新标签         |
 | DELETE | /api/tags/:id                 | 删除标签         |
+| GET    | /api/webhooks                 | 获取所有 Webhook |
+| POST   | /api/webhooks                 | 注册主动推送地址 |
 | GET    | /api/health                   | 健康检查         |
 
 ---
@@ -175,6 +177,47 @@ POST /api/tasks/batch
 Body: {"action": "update_status", "ids": [1,2,3], "value": "done"}
       {"action": "delete", "ids": [4,5]}
 ```
+
+---
+
+## 🔔 Webhooks (主动推送机制)
+
+为了能够接收主动通知（如每天早上的“任务逾期”提醒，或者任务被前端更新时的即时反馈），AI Agent 可以向 Tracker 注册自己的监听接口。
+
+### 注册 Webhook
+
+```
+POST /api/webhooks
+```
+
+```json
+{
+  "name": "OpenClaw Daily Alerts",
+  "url": "http://your-ai-agent-address:8000/webhook-listener",
+  "events": ["task.created", "task.updated", "task.overdue"]
+}
+```
+
+- **events**: 当前支持 `task.created`、`task.updated`、`task.overdue`。也可以传入 `["*"]` 来监听所有。
+
+### 接收推送数据格式
+
+当事件触发时，Tracker 会主动朝填写的 `url` 发送 `POST` 请求，AI 应该接收并根据 `event` 类型处理播报或状态同步：
+
+```json
+{
+  "event": "task.overdue",
+  "timestamp": "2026-03-10T09:00:00.000Z",
+  "data": {
+    "count": 2,
+    "tasks": [
+      { "id": 1, "title": "拖延的报告", "due_date": "2026-03-09", ... }
+    ]
+  }
+}
+```
+
+---
 
 ## 标签
 

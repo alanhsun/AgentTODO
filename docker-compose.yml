@@ -1,6 +1,6 @@
 services:
   lite-task-tracker:
-    image: alansundy/task-manager:latest
+    image: alansundy/lite-task-tracker:latest
     build: .
     container_name: lite-task-tracker
     restart: unless-stopped

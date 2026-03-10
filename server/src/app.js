@@ -6,6 +6,7 @@ const config = require('./config');
 const taskRoutes = require('./routes/tasks');
 const subtasksNotesRoutes = require('./routes/subtasks-notes');
 const tagRoutes = require('./routes/tags');
+const webhookRoutes = require('./routes/webhooks');
 
 // Load OpenAPI spec
 let swaggerDocument = null;
@@ -46,6 +47,7 @@ if (swaggerDocument) {
 app.use('/api/tasks', taskRoutes);
 app.use('/api/tasks', subtasksNotesRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Serve static files in production
 const clientBuildPath = path.join(__dirname, '..', '..', 'client', 'dist');

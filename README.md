@@ -25,7 +25,7 @@
 ```yaml
 services:
   lite-task-tracker:
-    image: alansundy/task-manager:latest
+    image: alansundy/lite-task-tracker:latest
     container_name: lite-task-tracker
     restart: unless-stopped
     ports:
