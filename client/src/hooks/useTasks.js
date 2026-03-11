@@ -46,3 +46,20 @@ export function useTags() {
 
   return { tags, loading, refetch: fetchTags };
 }
+
+export function useTaskSummary() {
+  const [summary, setSummary] = useState(null);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      const data = await tasksApi.summary();
+      setSummary(data);
+    } catch (err) {
+      console.error('Failed to fetch summary:', err);
+    }
+  }, []);
+
+  useEffect(() => { fetchSummary(); }, [fetchSummary]);
+
+  return { summary, refetch: fetchSummary };
+}

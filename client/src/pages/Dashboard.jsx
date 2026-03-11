@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { tasksApi, backupApi } from '../api';
-import { useTasks, useTags } from '../hooks/useTasks';
+import { useTasks, useTags, useTaskSummary } from '../hooks/useTasks';
 import TaskCard from '../components/TaskCard';
 import TaskForm from '../components/TaskForm';
 import FilterBar from '../components/FilterBar';
@@ -11,6 +11,7 @@ import CalendarBoard from '../components/CalendarBoard';
 export default function Dashboard() {
   const [filters, setFilters] = useState({ sort: 'created_at', order: 'desc', page: 1, limit: 20 });
   const { tasks, pagination, loading, refetch } = useTasks(filters);
+  const { summary, refetch: refetchSummary } = useTaskSummary();
   const { tags, refetch: refetchTags } = useTags();
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -44,6 +45,7 @@ export default function Dashboard() {
       setShowForm(false);
       setEditingTask(null);
       refetch();
+      refetchSummary();
       if (viewMode === 'kanban' || viewMode === 'calendar') kanbanRefetch();
       refetchTags();
     } catch (err) {
@@ -60,6 +62,7 @@ export default function Dashboard() {
     try {
       await tasksApi.update(id, { status });
       refetch();
+      refetchSummary();
       if (viewMode === 'kanban' || viewMode === 'calendar') kanbanRefetch();
     } catch (err) {
       alert(err.message);
@@ -79,6 +82,7 @@ export default function Dashboard() {
       await tasksApi.batch({ action, ids: selectedIds, value });
       setSelectedIds([]);
       refetch();
+      refetchSummary();
       if (viewMode === 'kanban' || viewMode === 'calendar') kanbanRefetch();
       refetchTags();
     } catch (err) {
@@ -133,9 +137,12 @@ export default function Dashboard() {
 
   // Summary counts (use kanban tasks when in kanban or calendar mode for accurate totals)
   const activeTasks = (viewMode === 'kanban' || viewMode === 'calendar') ? kanbanTasks : tasks;
-  const todoCnt = activeTasks.filter((t) => t.status === 'todo').length;
-  const inProgressCnt = activeTasks.filter((t) => t.status === 'in_progress').length;
-  const doneCnt = activeTasks.filter((t) => t.status === 'done').length;
+  
+  // Header counts using summary API to get accurate global data
+  const todoCnt = summary?.by_status?.todo || 0;
+  const inProgressCnt = summary?.by_status?.in_progress || 0;
+  const doneCnt = summary?.by_status?.done || 0;
+  const totalCnt = summary?.total || 0;
 
   return (
     <div className={`dashboard ${viewMode === 'kanban' || viewMode === 'calendar' ? 'kanban-mode' : ''}`}>
@@ -152,22 +159,25 @@ export default function Dashboard() {
         </div>
 
         <nav className="sidebar-nav">
-          <button className="nav-item active" onClick={() => setFilters({ ...filters, status: '', page: 1 })}>
+          <button className={`nav-item ${filters.status === '' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: '', page: 1 })}>
             <span className="nav-icon">📋</span>
             <span>全部任务</span>
-            <span className="nav-badge">{pagination.total}</span>
+            <span className="nav-badge">{totalCnt}</span>
           </button>
-          <button className="nav-item" onClick={() => setFilters({ ...filters, status: 'todo', page: 1 })}>
+          <button className={`nav-item ${filters.status === 'todo' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: 'todo', page: 1 })}>
             <span className="nav-icon">○</span>
             <span>待办</span>
+            {todoCnt > 0 && <span className="nav-badge">{todoCnt}</span>}
           </button>
-          <button className="nav-item" onClick={() => setFilters({ ...filters, status: 'in_progress', page: 1 })}>
+          <button className={`nav-item ${filters.status === 'in_progress' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: 'in_progress', page: 1 })}>
             <span className="nav-icon">◐</span>
             <span>进行中</span>
+            {inProgressCnt > 0 && <span className="nav-badge">{inProgressCnt}</span>}
           </button>
-          <button className="nav-item" onClick={() => setFilters({ ...filters, status: 'done', page: 1 })}>
+          <button className={`nav-item ${filters.status === 'done' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: 'done', page: 1 })}>
             <span className="nav-icon">●</span>
             <span>已完成</span>
+            {doneCnt > 0 && <span className="nav-badge">{doneCnt}</span>}
           </button>
         </nav>
 
