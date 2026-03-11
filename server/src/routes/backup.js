@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { getDb } = require('../db');
 
 // GET /api/backup/export - Export all database state as JSON
 router.get('/export', async (req, res) => {
   try {
+    const db = getDb();
     const tasks = await db('tasks');
     const tags = await db('tags');
     const task_tags = await db('task_tags');
@@ -40,6 +41,7 @@ router.post('/import', async (req, res) => {
   }
   
   try {
+    const db = getDb();
     await db.transaction(async (trx) => {
       // Clear existing records
       await trx('task_tags').del();
