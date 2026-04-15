@@ -8,11 +8,9 @@
     "dev": "node --watch src/server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --forceExit --detectOpenHandles",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --forceExit --detectOpenHandles",
-    "migrate": "knex migrate:latest --knexfile knexfile.js",
-    "mcp": "node src/mcp.js"
+    "migrate": "knex migrate:latest --knexfile knexfile.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
     "axios": "^1.13.6",
     "cors": "^2.8.5",
     "express": "^4.21.0",

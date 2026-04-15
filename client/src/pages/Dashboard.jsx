@@ -20,12 +20,23 @@ export default function Dashboard() {
   const [batchLoading, setBatchLoading] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'kanban'
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 768) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
@@ -146,8 +157,13 @@ export default function Dashboard() {
 
   return (
     <div className={`dashboard ${viewMode === 'kanban' || viewMode === 'calendar' ? 'kanban-mode' : ''}`}>
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)} />
+      )}
+
       {/* Sidebar — hidden in kanban mode via CSS */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
           <div className="brand">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="brand-icon">
@@ -208,6 +224,19 @@ export default function Dashboard() {
       {/* Main Content */}
       <main className="main-content">
         <div className="main-header">
+          {/* Mobile Menu Button */}
+          <button 
+            className="mobile-menu-btn" 
+            onClick={() => setIsMobileMenuOpen(true)}
+            title="打开菜单"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+
           {/* Brand inline — only shows in full screen mode */}
           {(viewMode === 'kanban' || viewMode === 'calendar') && (
             <div className="header-brand">
