@@ -35,4 +35,5 @@ jobs:
           context: .
           push: true
           # 镜像的名字将是：你的用户名/agenttodo:latest
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/agenttodo:latest
+          # 注意：Docker 镜像名称必须全部小写，且不能包含特殊字符
+          tags: alanhsun/agenttodo:latest
