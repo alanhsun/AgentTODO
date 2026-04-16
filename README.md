@@ -5,6 +5,7 @@
 </p>
 
 <purpose>
+  
 **AgentTODO** 是一个专为 AI 助手（如 OpenClaw、ChatGPT、Coze 等）设计的轻量级、本地化任务管理中枢。它提供现代化的响应式 Web UI（看板 + 列表视图），并通过**命令行技能系统 (CLI Skill System)** 和**无认证 REST API** 暴露能力，使 AI 助理能够作为执行力教练直接读写任务数据。
 </purpose>
 
