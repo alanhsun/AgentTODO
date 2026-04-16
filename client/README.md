@@ -25,8 +25,8 @@ npm run dev
 <!-- /input -->
 
 <!-- @output -->
-前端开发服务器将运行在 `http://localhost:5173`。
-会自动将 `/api` 请求代理到后端的 `http://localhost:3300`（需在 `vite.config.js` 中配置或确保后端已启动）。
+前端开发服务器将运行在 `http://localhost:3300`。
+会自动将 `/api` 请求代理到后端的 `http://localhost:3301`（需确保根目录执行 `npm run dev` 启动了后端服务）。
 <!-- /output -->
 
 ---

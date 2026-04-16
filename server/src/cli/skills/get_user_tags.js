@@ -2,7 +2,7 @@ const BaseSkill = require('../BaseSkill');
 const axios = require('axios');
 
 // 为什么需要 BASE_URL？有了它，我们就知道包裹该往哪个地址寄了。
-const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3300/api';
+const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
 
 /**
  * 获取可用标签技能 (GetUserTagsSkill)

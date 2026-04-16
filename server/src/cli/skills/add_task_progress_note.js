@@ -2,7 +2,7 @@ const BaseSkill = require('../BaseSkill');
 const axios = require('axios');
 
 // 为什么需要 BASE_URL？这是后端服务的主机地址。
-const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3300/api';
+const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
 
 /**
  * 记录任务进度技能 (AddTaskProgressNoteSkill)

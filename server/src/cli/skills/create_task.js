@@ -2,7 +2,7 @@ const BaseSkill = require('../BaseSkill');
 const axios = require('axios');
 
 // 为什么需要 BASE_URL？因为我们的 CLI 相当于一个遥控器，它需要知道服务器（主机）的具体地址才能发指令。
-const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3300/api';
+const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
 
 /**
  * 创建任务技能 (CreateTaskSkill)

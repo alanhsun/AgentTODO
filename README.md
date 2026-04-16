@@ -49,6 +49,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3300
+      - AGENTTODO_URL=http://localhost:3300/api
       - DB_PATH=/data/tasks.db
 
 volumes:
@@ -103,8 +104,8 @@ npm run dev
 <!-- /input -->
 
 <!-- @output -->
-- 本地前端运行在：`http://localhost:5173`
-- 后端 API 运行在：`http://localhost:3300`
+- 本地前端运行在：`http://localhost:3300` (支持热更新)
+- 后端 API 运行在：`http://localhost:3301`
 - CLI 交互终端可通过 `node server/src/cli/index.js` 启动。
 <!-- /output -->
 

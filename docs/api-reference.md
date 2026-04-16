@@ -6,7 +6,7 @@
 <!-- /purpose -->
 
 <!-- @dependencies -->
-- 基础 URL: `http://<服务器地址>:3300` (默认本地运行于 3300 端口)
+- 基础 URL: `http://<服务器地址>:3300` (开发模式下，Vite 前端在 3300 端口会自动代理 API 请求至后端的 3301)
 - 内容类型: `application/json`
 - API 规范: OpenAPI 3.0 (可访问 `/api/openapi.json` 获取)
 - 交互式文档: 浏览器访问 `/api-docs` 查看 Swagger UI

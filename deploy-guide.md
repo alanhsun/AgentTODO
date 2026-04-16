@@ -66,14 +66,13 @@ docker-compose up -d
 <!-- @input -->
 ```bash
 # 安装根目录和子目录依赖
+npm install
 cd server && npm install
 cd ../client && npm install
 
-# 终端 A：启动后端 (监听 3300 端口)
-cd server && npm run dev
-
-# 终端 B：启动前端 (监听 5173 端口，并自动代理 API 请求)
-cd client && npm run dev
+# 启动前后端服务
+# 此时前端会运行在 3300 端口，后端 API 运行在 3301 端口
+npm run dev
 ```
 <!-- /input -->
 

@@ -2,7 +2,7 @@ const BaseSkill = require('../BaseSkill');
 const axios = require('axios');
 
 // 为什么需要 BASE_URL？因为我们需要知道服务器的具体地址才能发请求。
-const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3300/api';
+const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
 
 /**
  * 获取今日待办技能 (GetTodayAgendaSkill)

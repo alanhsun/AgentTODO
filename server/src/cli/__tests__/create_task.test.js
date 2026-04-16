@@ -34,7 +34,7 @@ describe('CreateTaskSkill 测试 (创建任务技能)', () => {
     const result = await skill.execute(args);
 
     // 检查一：确保假 axios 被叫去跑腿了，而且去了正确的地址
-    expect(axios.post).toHaveBeenCalledWith('http://localhost:3300/api/tasks', {
+    expect(axios.post).toHaveBeenCalledWith('http://localhost:3301/api/tasks', {
       title: '买咖啡',
       priority: 'high',
       recurrence: 'none' // 技能自带的默认值
