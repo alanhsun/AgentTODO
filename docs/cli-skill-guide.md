@@ -1,5 +1,9 @@
 # AgentTODO CLI 技能系统开发指南
 
+<purpose>
+本文档旨在帮助开发者了解如何运行 CLI 终端，以及如何利用 `BaseSkill` 模板在本地快速编写和测试新的可插拔技能（Skill）。
+</purpose>
+
 你好！欢迎来到 AgentTODO 的 CLI 技能系统。
 为了让 AI 助手能够更轻量、更灵活地操作任务，我们将原来的 MCP（Model Context Protocol）替换为了**基于命令行的可插拔技能系统 (Skill System)**。
 

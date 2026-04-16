@@ -1,16 +1,49 @@
-# React + Vite
+# AgentTODO 客户端 (Client)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+<purpose>
+AgentTODO 的前端界面，采用 React + Vite 构建。提供现代化的响应式 Web UI（包含看板与列表双视图），与无认证 (Zero-Auth) 的后端 API 直接交互，为用户提供直观的任务管理体验。
+</purpose>
 
-Currently, two official plugins are available:
+<dependencies>
+- Node.js >= 20
+- React 18
+- Vite
+</dependencies>
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## 🚀 快速启动
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+<input>
+```bash
+# 1. 安装依赖
+npm install
 
-## Expanding the ESLint configuration
+# 2. 启动开发服务器
+npm run dev
+```
+</input>
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+<output>
+前端开发服务器将运行在 `http://localhost:5173`。
+会自动将 `/api` 请求代理到后端的 `http://localhost:3300`（需在 `vite.config.js` 中配置或确保后端已启动）。
+</output>
+
+---
+
+## 🛠️ 构建与部署
+
+<input>
+```bash
+# 构建生产环境静态文件
+npm run build
+```
+</input>
+
+<output>
+构建产物将输出到 `dist` 目录。在生产环境中，该目录将被后端服务直接代理作为静态资源提供访问。
+</output>
+
+<references>
+- 关于整个项目的部署说明：[部署指南](../deploy-guide.md)
+</references>

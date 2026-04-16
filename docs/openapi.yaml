@@ -1,7 +1,8 @@
 openapi: 3.0.3
 info:
   title: AgentTODO API
-  description: AI 驱动的任务系统 RESTful API
+  description: >
+    <purpose>AI 驱动的任务系统 RESTful API，专为本地私有化 (Zero-Auth) 环境设计，无缝对接 AI 助手和命令行技能系统。</purpose>
   version: 1.0.0
   contact:
     name: AgentTODO
@@ -10,39 +11,11 @@ servers:
     description: 本地开发
 
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
   schemas:
-    User:
-      type: object
-      properties:
-        id:
-          type: integer
-        username:
-          type: string
-        email:
-          type: string
-
-    AuthResponse:
-      type: object
-      properties:
-        message:
-          type: string
-        user:
-          $ref: '#/components/schemas/User'
-        token:
-          type: string
-
     Tag:
       type: object
       properties:
         id:
-          type: integer
-        user_id:
           type: integer
         name:
           type: string
@@ -55,8 +28,6 @@ components:
       type: object
       properties:
         id:
-          type: integer
-        user_id:
           type: integer
         title:
           type: string
@@ -186,85 +157,10 @@ paths:
                     type: string
                     format: date-time
 
-  /api/auth/register:
-    post:
-      summary: 用户注册
-      tags: [Auth]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [username, email, password]
-              properties:
-                username:
-                  type: string
-                  example: admin
-                email:
-                  type: string
-                  format: email
-                  example: admin@example.com
-                password:
-                  type: string
-                  minLength: 6
-                  example: password123
-      responses:
-        '201':
-          description: 注册成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '400':
-          description: 参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: 用户名或邮箱已存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/auth/login:
-    post:
-      summary: 用户登录
-      tags: [Auth]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [username, password]
-              properties:
-                username:
-                  type: string
-                password:
-                  type: string
-      responses:
-        '200':
-          description: 登录成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '401':
-          description: 认证失败
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
   /api/tasks:
     get:
       summary: 获取任务列表
       tags: [Tasks]
-      security:
-        - BearerAuth: []
       parameters:
         - name: status
           in: query
@@ -339,18 +235,10 @@ paths:
                       $ref: '#/components/schemas/Task'
                   pagination:
                     $ref: '#/components/schemas/Pagination'
-        '401':
-          description: 未认证
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
     post:
       summary: 创建任务
       tags: [Tasks]
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -380,8 +268,6 @@ paths:
     get:
       summary: 获取单个任务
       tags: [Tasks]
-      security:
-        - BearerAuth: []
       parameters:
         - name: id
           in: path
@@ -405,8 +291,6 @@ paths:
     put:
       summary: 更新任务
       tags: [Tasks]
-      security:
-        - BearerAuth: []
       parameters:
         - name: id
           in: path
@@ -436,8 +320,6 @@ paths:
     delete:
       summary: 删除任务
       tags: [Tasks]
-      security:
-        - BearerAuth: []
       parameters:
         - name: id
           in: path
@@ -465,26 +347,12 @@ paths:
     post:
       summary: 批量操作
       tags: [Tasks]
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BatchInput'
-            examples:
-              batch_complete:
-                summary: 批量标记完成
-                value:
-                  action: update_status
-                  ids: [1, 2, 3]
-                  value: done
-              batch_delete:
-                summary: 批量删除
-                value:
-                  action: delete
-                  ids: [4, 5]
       responses:
         '200':
           description: 操作成功
@@ -499,25 +367,14 @@ paths:
                     type: integer
         '400':
           description: 参数错误
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  errors:
-                    type: array
-                    items:
-                      type: string
 
   /api/tags:
     get:
       summary: 获取标签列表
       tags: [Tags]
-      security:
-        - BearerAuth: []
       responses:
         '200':
-          description: 标签列表（含任务计数）
+          description: 标签列表
           content:
             application/json:
               schema:
@@ -528,8 +385,6 @@ paths:
     post:
       summary: 创建标签
       tags: [Tags]
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -554,17 +409,11 @@ paths:
                 $ref: '#/components/schemas/Tag'
         '409':
           description: 标签名已存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
   /api/tags/{id}:
     put:
       summary: 更新标签
       tags: [Tags]
-      security:
-        - BearerAuth: []
       parameters:
         - name: id
           in: path
@@ -591,16 +440,10 @@ paths:
                 $ref: '#/components/schemas/Tag'
         '404':
           description: 标签不存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
     delete:
       summary: 删除标签
       tags: [Tags]
-      security:
-        - BearerAuth: []
       parameters:
         - name: id
           in: path
@@ -610,16 +453,5 @@ paths:
       responses:
         '200':
           description: 删除成功
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
         '404':
           description: 标签不存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
