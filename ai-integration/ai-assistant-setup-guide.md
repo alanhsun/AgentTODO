@@ -1,44 +1,44 @@
 # 🤖 AI 助手接入指南 (零基础版)
 
-<purpose>
+<!-- @purpose -->
 指导非技术用户如何将任意支持插件或工具调用的 AI 助手（如 OpenClaw, ChatGPT, Coze 等）与 AgentTODO 系统集成，使其成为个人的“执行力教练”。
-</purpose>
+<!-- /purpose -->
 
-<dependencies>
+<!-- @dependencies -->
 - 已成功运行在本地的 AgentTODO 实例 (默认 `http://localhost:3300`)
 - 支持插件配置/工具调用的 AI 助手客户端
-</dependencies>
+<!-- /dependencies -->
 
 ---
 
 ## 阶段一：配置“智能执行器”工作流 (Skill/Workflow) 🧠
 
-<purpose>
+<!-- @purpose -->
 通过给 AI 设定初始 Prompt，让其理解何时应该调用对应的任务工具。
-</purpose>
+<!-- /purpose -->
 
-<input>
+<!-- @input -->
 将以下内容复制并粘贴到 AI 助手的“系统提示词 (System Prompt)”、“角色设定”或“工作流配置”区域：
 
 > **【AgentTODO 代理技能准则】**
 > 1. **隐式盘查**：每天当我们进行第一次对话，或我向你请教今日安排时，你应该静默调用 `get_daily_summary` 或 `get_today_agenda` 获取任务概况，无需询问我。
 > 2. **化大为小**：当我提出一个含糊的长期目标（例如：“我准备做下个月的旅游攻略”）时，主动帮我拆解为 3-5 个子步骤（如：订机票、订酒店、排行程）。向我确认后，使用 `create_task` 并附带 `subtasks` 参数一次性写入系统。
 > 3. **主动追踪**：在日常对话中（例如：“我终于写完那段代码了”），请主动提取进度信息，通过 `add_task_progress_note` 记录为任务日志，并自动勾选对应子任务或将主任务状态更新为完成。无需经过我的明确同意。
-</input>
+<!-- /input -->
 
 ---
 
 ## 阶段二：给 AI 安装“机械手臂”（添加工具插件） 🦾
 
-<purpose>
+<!-- @purpose -->
 为 AI 助手配置 6 个核心的 REST API 技能，使其能够实际读写 AgentTODO 系统数据。
-</purpose>
+<!-- /purpose -->
 
 > **说明**：AgentTODO 已全面重构为**免认证 (Zero-Auth)** 架构，AI 直接发起 HTTP 请求即可。
 
 请在 AI 的 **工具配置 / 插件管理** 界面，逐一添加以下 6 个 API 技能：
 
-<input>
+<!-- @input -->
 ### 技能 1：获取每日概览 (get_daily_summary)
 - **名称**: `get_daily_summary`
 - **描述**: 获取当前任务的完整统计大盘（总数、今日待办数、逾期数）。AI 每天初次交谈或需要了解全局时调用。
@@ -87,17 +87,17 @@
 - **名称**: `add_task_progress_note`
 - **描述**: 记录执行进展日志，或标记某个子任务状态为完成。
 - **URL**: `http://localhost:3300/api/tasks/{{task_id}}/notes` (注：对于无法组合请求的 AI 客户端，建议使用开发者提供的 Python 包装脚本或 CLI 技能通道)
-</input>
+<!-- /input -->
 
 ---
 
 ## 阶段三：测试你的 AI 教练！🎯
 
-<purpose>
+<!-- @purpose -->
 验证 AI 助手是否能正确理解自然语言并调用对应的 API 接口。
-</purpose>
+<!-- /purpose -->
 
-<input>
+<!-- @input -->
 配置完毕后，试着对 AI 发送以下指令进行测试：
 
 1. **“早上好，帮我看看今天有哪些必须完成的事情？”**
@@ -108,9 +108,9 @@
 
 3. **“旅游的机票我刚才买好了。”**
    *(期望输出：AI 调用 `add_task_progress_note` 记录笔记并打勾，提醒下一步)*
-</input>
+<!-- /input -->
 
-<references>
+<!-- @references -->
 - 想要了解更详细的接口参数定义？[阅读 API 接口参考](../docs/api-reference.md)
 - 想要开发进阶的本地 CLI 技能？[阅读 CLI 技能开发指南](../docs/cli-skill-guide.md)
-</references>
+<!-- /references -->

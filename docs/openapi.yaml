@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: AgentTODO API
   description: >
-    <purpose>AI 驱动的任务系统 RESTful API，专为本地私有化 (Zero-Auth) 环境设计，无缝对接 AI 助手和命令行技能系统。</purpose>
+    <!-- @purpose -->AI 驱动的任务系统 RESTful API，专为本地私有化 (Zero-Auth) 环境设计，无缝对接 AI 助手和命令行技能系统。<!-- /purpose -->
   version: 1.0.0
   contact:
     name: AgentTODO

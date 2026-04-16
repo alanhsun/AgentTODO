@@ -1,14 +1,14 @@
 # AgentTODO 工具使用工作流 (Skill Workflow)
 
-<purpose>
+<!-- @purpose -->
 这是一个纯净版的 AI 技能执行规范。不改变 AI 原有性格，仅指导 AI（如 OpenClaw, Coze, Dify）如何正确组合并使用 AgentTODO 插件接口及 CLI 技能系统。
-</purpose>
+<!-- /purpose -->
 
 ---
 
 ## 🛠️ AgentTODO 任务管理技能执行规范
 
-<input>
+<!-- @input -->
 请将以下内容复制并粘贴到 AI 的「系统提示词 (System Prompt)」或「工具说明」区域：
 
 > **【AgentTODO 任务管理技能执行规范】**
@@ -32,13 +32,13 @@
 > **禁止行为**：
 > - 不要擅自增加不必要的标签，创建同类任务前如有条件可调用 `get_user_tags` 查阅已有标签字典。
 > - 在没有明确用户指令授权的情况下，绝不批量删除或覆盖历史数据。
-</input>
+<!-- /input -->
 
 ---
 
 ## 💡 使用场景示例
 
-<output>
+<!-- @output -->
 - **场景一：日常问候**
   - 用户：“早上好”
   - AI：(静默调用 `get_today_agenda`) “早上好！你今天有 3 个待办事项，另外昨天还有一个未完成的‘修改报告’逾期了，需要优先处理吗？”
@@ -46,9 +46,9 @@
 - **场景二：任务进展汇报**
   - 用户：“下午的会议我已经开完了”
   - AI：(静默调用 `add_task_progress_note`) “好的，我已为你记录在案，并将‘下午的会议’标记为完成状态。接下来你可以专注于‘写代码’的任务了。”
-</output>
+<!-- /output -->
 
-<references>
+<!-- @references -->
 - 详细 API 调用参数：[查看 API 参考](../docs/api-reference.md)
 - 如果想通过命令行调试技能：[查看 CLI 技能开发指南](../docs/cli-skill-guide.md)
-</references>
+<!-- /references -->
