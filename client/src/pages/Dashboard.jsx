@@ -47,9 +47,24 @@ export default function Dashboard() {
     { allPages: true },
   );
 
+  const getIncompleteSubtaskCount = async (taskId) => {
+    const subtasks = await tasksApi.listSubtasks(taskId);
+    return subtasks.filter((subtask) => !subtask.completed).length;
+  };
+
+  const confirmTaskCompletion = async (taskId) => {
+    const incompleteCount = await getIncompleteSubtaskCount(taskId);
+    return incompleteCount === 0
+      || confirm(`还有 ${incompleteCount} 个子任务未完成，仍要完成主任务吗？`);
+  };
+
   const handleCreateOrUpdate = async (data) => {
     try {
       if (editingTask) {
+        if (data.status === 'done' && editingTask.status !== 'done'
+          && !(await confirmTaskCompletion(editingTask.id))) {
+          return;
+        }
         await tasksApi.update(editingTask.id, data);
       } else {
         await tasksApi.create(data);
@@ -72,6 +87,7 @@ export default function Dashboard() {
 
   const handleStatusChange = async (id, status) => {
     try {
+      if (status === 'done' && !(await confirmTaskCompletion(id))) return;
       await tasksApi.update(id, { status });
       refetch();
       refetchSummary();
@@ -79,6 +95,11 @@ export default function Dashboard() {
     } catch (err) {
       alert(err.message);
     }
+  };
+
+  const handleSubtasksChanged = () => {
+    refetch();
+    if (viewMode === 'kanban' || viewMode === 'calendar') kanbanRefetch();
   };
 
   const handleSelect = (id) => {
@@ -91,6 +112,15 @@ export default function Dashboard() {
     if (selectedIds.length === 0) return;
     setBatchLoading(true);
     try {
+      if (action === 'update_status' && value === 'done') {
+        const incompleteCounts = await Promise.all(selectedIds.map(getIncompleteSubtaskCount));
+        const affectedTasks = incompleteCounts.filter((count) => count > 0).length;
+        const incompleteTotal = incompleteCounts.reduce((sum, count) => sum + count, 0);
+        if (affectedTasks > 0
+          && !confirm(`所选任务中有 ${affectedTasks} 项包含共 ${incompleteTotal} 个未完成子任务，仍要全部标记完成吗？`)) {
+          return;
+        }
+      }
       await tasksApi.batch({ action, ids: selectedIds, value });
       setSelectedIds([]);
       refetch();
@@ -414,6 +444,7 @@ export default function Dashboard() {
           task={editingTask}
           tags={tags}
           onSubmit={handleCreateOrUpdate}
+          onSubtasksChanged={handleSubtasksChanged}
           onCancel={() => { setShowForm(false); setEditingTask(null); }}
         />
       )}

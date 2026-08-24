@@ -131,6 +131,8 @@ GET /api/tasks?status=todo&priority=high&search=关键词&sort=due_date&order=as
 - `tag`: 标签ID
 - `search`: 模糊搜索标题和描述
 - `due_before` / `due_after`: 时间过滤
+
+每个任务会额外返回 `subtask_progress`，例如 `{"total": 4, "completed": 2}`；没有子任务时为 `null`。
 <!-- /input -->
 
 ### 2.3 更新与删除任务
@@ -155,7 +157,7 @@ DELETE /api/tasks/:id
 ```http
 GET    /api/tasks/:id/subtasks           # 获取子任务列表
 POST   /api/tasks/:id/subtasks           # 添加新子任务 (Body: {"title": "步骤1"})
-PUT    /api/tasks/:id/subtasks/:sid      # 更新子任务状态 (Body: {"completed": true})
+PUT    /api/tasks/:id/subtasks/:sid      # 更新标题或状态 (Body: {"title": "新标题", "completed": true})
 DELETE /api/tasks/:id/subtasks/:sid      # 删除子任务
 ```
 <!-- /input -->

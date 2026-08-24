@@ -60,6 +60,23 @@ describe('Task API and database integrity', () => {
     expect(response.body.data.map((task) => task.priority)).toEqual(['urgent', 'high', 'medium', 'low']);
   });
 
+  test('includes subtask progress in the regular task list', async () => {
+    const created = await request(app).post('/api/tasks').send({
+      title: '带进度的任务',
+      subtasks: ['第一步', '第二步'],
+    });
+    const db = getDb();
+    const firstSubtask = await db('subtasks').where({ task_id: created.body.id }).orderBy('sort_order').first();
+    await request(app)
+      .put(`/api/tasks/${created.body.id}/subtasks/${firstSubtask.id}`)
+      .send({ completed: true });
+
+    const response = await request(app).get('/api/tasks');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data[0].subtask_progress).toEqual({ total: 2, completed: 1 });
+  });
+
   test('validates update field types instead of returning a server error', async () => {
     const created = await request(app).post('/api/tasks').send({ title: '原任务' });
     const response = await request(app).put(`/api/tasks/${created.body.id}`).send({ title: 123 });

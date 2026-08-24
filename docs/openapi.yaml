@@ -77,6 +77,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Tag'
+        subtask_progress:
+          type: object
+          nullable: true
+          properties:
+            total: { type: integer, minimum: 0 }
+            completed: { type: integer, minimum: 0 }
 
     Subtask:
       type: object

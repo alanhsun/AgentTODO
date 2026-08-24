@@ -22,6 +22,9 @@ const RECURRENCE_LABELS = { daily: '每天', weekly: '每周', monthly: '每月'
 
 export default function TaskCard({ task, onEdit, onStatusChange, onSelect, selected, draggable, onDragStart }) {
   const dateInfo = formatDate(task.due_date);
+  const subtaskTotal = Number(task.subtask_progress?.total || 0);
+  const subtaskCompleted = Number(task.subtask_progress?.completed || 0);
+  const subtaskPercent = subtaskTotal > 0 ? Math.round((subtaskCompleted / subtaskTotal) * 100) : 0;
 
   const handleStatusClick = (e) => {
     e.stopPropagation();
@@ -53,6 +56,24 @@ export default function TaskCard({ task, onEdit, onStatusChange, onSelect, selec
           <span className="checkmark"></span>
         </label>
       </div>
+
+      {subtaskTotal > 0 && (
+        <div className="task-subtask-progress" aria-label={`子任务完成 ${subtaskCompleted}/${subtaskTotal}`}>
+          <div className="task-subtask-progress-label">
+            <span>子任务</span>
+            <span>{subtaskCompleted}/{subtaskTotal}</span>
+          </div>
+          <div
+            className="task-subtask-progress-track"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax={subtaskTotal}
+            aria-valuenow={subtaskCompleted}
+          >
+            <span style={{ width: `${subtaskPercent}%` }} />
+          </div>
+        </div>
+      )}
 
       <div className="task-card-footer">
         <div className="task-meta">

@@ -195,9 +195,26 @@ router.get('/', async (req, res) => {
       tagMap[tt.task_id].push({ id: tt.id, name: tt.name, color: tt.color });
     });
 
+    const subtaskStats = taskIds.length > 0
+      ? await db('subtasks')
+          .whereIn('task_id', taskIds)
+          .select('task_id')
+          .count('* as total')
+          .sum({ completed: db.raw('CASE WHEN completed = 1 THEN 1 ELSE 0 END') })
+          .groupBy('task_id')
+      : [];
+    const subtaskStatsMap = {};
+    subtaskStats.forEach((stats) => {
+      subtaskStatsMap[stats.task_id] = {
+        total: Number(stats.total),
+        completed: Number(stats.completed || 0),
+      };
+    });
+
     const result = tasks.map((t) => ({
       ...t,
       tags: tagMap[t.id] || [],
+      subtask_progress: subtaskStatsMap[t.id] || null,
     }));
 
     res.json({

@@ -35,9 +35,16 @@ function createInitialForm(task) {
   };
 }
 
-export default function TaskForm({ task, tags, onSubmit, onCancel }) {
+export default function TaskForm({ task, tags, onSubmit, onCancel, onSubtasksChanged }) {
   const [form, setForm] = useState(() => createInitialForm(task));
   const [newSubtask, setNewSubtask] = useState('');
+  const [subtasks, setSubtasks] = useState([]);
+  const [subtasksLoading, setSubtasksLoading] = useState(Boolean(task));
+  const [subtaskError, setSubtaskError] = useState('');
+  const [showCompletedSubtasks, setShowCompletedSubtasks] = useState(false);
+  const [editingSubtaskId, setEditingSubtaskId] = useState(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
+  const [busySubtaskId, setBusySubtaskId] = useState(null);
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
 
@@ -45,11 +52,21 @@ export default function TaskForm({ task, tags, onSubmit, onCancel }) {
     if (!task) return undefined;
 
     let active = true;
-    tasksApi.listNotes(task.id)
-      .then((loadedNotes) => {
-        if (active) setNotes(loadedNotes);
+    Promise.all([
+      tasksApi.listSubtasks(task.id),
+      tasksApi.listNotes(task.id),
+    ])
+      .then(([loadedSubtasks, loadedNotes]) => {
+        if (!active) return;
+        setSubtasks(loadedSubtasks);
+        setNotes(loadedNotes);
       })
-      .catch((err) => console.error('Failed to load notes:', err));
+      .catch((err) => {
+        if (active) setSubtaskError(`加载子任务失败：${err.message}`);
+      })
+      .finally(() => {
+        if (active) setSubtasksLoading(false);
+      });
 
     return () => { active = false; };
   }, [task]);
@@ -75,13 +92,34 @@ export default function TaskForm({ task, tags, onSubmit, onCancel }) {
     }));
   };
 
-  const addSubtask = () => {
-    if (newSubtask.trim()) {
+  const notifySubtasksChanged = () => {
+    onSubtasksChanged?.();
+  };
+
+  const addSubtask = async () => {
+    const title = newSubtask.trim();
+    if (!title) return;
+
+    if (!task) {
       setForm((prev) => ({
         ...prev,
-        subtasks: [...prev.subtasks, newSubtask.trim()],
+        subtasks: [...prev.subtasks, title],
       }));
       setNewSubtask('');
+      return;
+    }
+
+    setBusySubtaskId('new');
+    setSubtaskError('');
+    try {
+      const added = await tasksApi.addSubtask(task.id, title);
+      setSubtasks((prev) => [...prev, added]);
+      setNewSubtask('');
+      notifySubtasksChanged();
+    } catch (error) {
+      setSubtaskError(error.message);
+    } finally {
+      setBusySubtaskId(null);
     }
   };
 
@@ -91,6 +129,70 @@ export default function TaskForm({ task, tags, onSubmit, onCancel }) {
       subtasks: prev.subtasks.filter((_, i) => i !== index),
     }));
   };
+
+  const toggleSubtask = async (subtask) => {
+    setBusySubtaskId(subtask.id);
+    setSubtaskError('');
+    try {
+      const updated = await tasksApi.updateSubtask(task.id, subtask.id, {
+        completed: !subtask.completed,
+      });
+      setSubtasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      notifySubtasksChanged();
+    } catch (error) {
+      setSubtaskError(error.message);
+    } finally {
+      setBusySubtaskId(null);
+    }
+  };
+
+  const beginRenameSubtask = (subtask) => {
+    setEditingSubtaskId(subtask.id);
+    setEditingSubtaskTitle(subtask.title);
+  };
+
+  const saveSubtaskTitle = async () => {
+    const subtaskId = editingSubtaskId;
+    const title = editingSubtaskTitle.trim();
+    if (!subtaskId) return;
+
+    const existing = subtasks.find((item) => item.id === subtaskId);
+    setEditingSubtaskId(null);
+    if (!title || title === existing?.title) return;
+
+    setBusySubtaskId(subtaskId);
+    setSubtaskError('');
+    try {
+      const updated = await tasksApi.updateSubtask(task.id, subtaskId, { title });
+      setSubtasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      notifySubtasksChanged();
+    } catch (error) {
+      setSubtaskError(error.message);
+    } finally {
+      setBusySubtaskId(null);
+    }
+  };
+
+  const deleteExistingSubtask = async (subtask) => {
+    if (!confirm(`确定删除子任务“${subtask.title}”吗？`)) return;
+    setBusySubtaskId(subtask.id);
+    setSubtaskError('');
+    try {
+      await tasksApi.deleteSubtask(task.id, subtask.id);
+      setSubtasks((prev) => prev.filter((item) => item.id !== subtask.id));
+      notifySubtasksChanged();
+    } catch (error) {
+      setSubtaskError(error.message);
+    } finally {
+      setBusySubtaskId(null);
+    }
+  };
+
+  const incompleteSubtasks = subtasks.filter((subtask) => !subtask.completed);
+  const completedSubtasks = subtasks.filter((subtask) => subtask.completed);
+  const visibleSubtasks = showCompletedSubtasks
+    ? [...incompleteSubtasks, ...completedSubtasks]
+    : incompleteSubtasks;
 
   const handleAddNote = async () => {
     if (!newNote.trim() || !task) return;
@@ -232,6 +334,136 @@ export default function TaskForm({ task, tags, onSubmit, onCancel }) {
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+          )}
+
+          {/* Existing subtasks — managed independently while editing */}
+          {task && (
+            <div className="form-group subtask-manager">
+              <div className="subtask-section-header">
+                <label>子任务</label>
+                {subtasks.length > 0 && (
+                  <span className="subtask-count">
+                    {completedSubtasks.length}/{subtasks.length} 已完成
+                  </span>
+                )}
+              </div>
+
+              {subtasks.length > 0 && (
+                <div
+                  className="subtask-progress-track"
+                  role="progressbar"
+                  aria-valuemin="0"
+                  aria-valuemax={subtasks.length}
+                  aria-valuenow={completedSubtasks.length}
+                  aria-label="子任务完成进度"
+                >
+                  <span style={{ width: `${(completedSubtasks.length / subtasks.length) * 100}%` }} />
+                </div>
+              )}
+
+              <div className="subtask-input-row">
+                <input
+                  type="text"
+                  value={newSubtask}
+                  onChange={(e) => setNewSubtask(e.target.value)}
+                  placeholder="添加子任务..."
+                  maxLength={255}
+                  disabled={busySubtaskId === 'new'}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addSubtask();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  onClick={addSubtask}
+                  disabled={!newSubtask.trim() || busySubtaskId === 'new'}
+                >
+                  添加
+                </button>
+              </div>
+
+              {subtaskError && <p className="subtask-error" role="alert">{subtaskError}</p>}
+              {subtasksLoading ? (
+                <p className="subtask-empty">正在加载子任务...</p>
+              ) : subtasks.length === 0 ? (
+                <p className="subtask-empty">暂无子任务，可以从上方快速添加。</p>
+              ) : (
+                <>
+                  <ul className="subtask-list editable-subtask-list">
+                    {visibleSubtasks.map((subtask) => (
+                      <li key={subtask.id} className={`subtask-item ${subtask.completed ? 'completed' : ''}`}>
+                        <input
+                          className="subtask-toggle"
+                          type="checkbox"
+                          checked={Boolean(subtask.completed)}
+                          disabled={busySubtaskId === subtask.id}
+                          onChange={() => toggleSubtask(subtask)}
+                          aria-label={`标记“${subtask.title}”${subtask.completed ? '未完成' : '完成'}`}
+                        />
+                        {editingSubtaskId === subtask.id ? (
+                          <input
+                            className="subtask-rename-input"
+                            value={editingSubtaskTitle}
+                            maxLength={255}
+                            autoFocus
+                            onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                            onBlur={saveSubtaskTitle}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.currentTarget.blur();
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="subtask-title">{subtask.title}</span>
+                        )}
+                        <div className="subtask-actions">
+                          <button
+                            type="button"
+                            className="btn-icon-sm"
+                            onClick={() => beginRenameSubtask(subtask)}
+                            disabled={busySubtaskId === subtask.id}
+                            aria-label={`修改“${subtask.title}”`}
+                            title="修改"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon-sm"
+                            onClick={() => deleteExistingSubtask(subtask)}
+                            disabled={busySubtaskId === subtask.id}
+                            aria-label={`删除“${subtask.title}”`}
+                            title="删除"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {completedSubtasks.length > 0 && (
+                    <button
+                      type="button"
+                      className="subtask-completed-toggle"
+                      onClick={() => setShowCompletedSubtasks((value) => !value)}
+                    >
+                      {showCompletedSubtasks ? '收起' : '展开'}已完成子任务（{completedSubtasks.length}）
+                    </button>
+                  )}
+
+                  {incompleteSubtasks.length === 0 && task.status !== 'done' && (
+                    <p className="subtask-complete-hint">全部子任务已完成，可将主任务标记为完成。</p>
+                  )}
+                </>
               )}
             </div>
           )}
