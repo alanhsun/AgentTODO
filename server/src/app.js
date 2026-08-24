@@ -8,6 +8,7 @@ const subtasksNotesRoutes = require('./routes/subtasks-notes');
 const tagRoutes = require('./routes/tags');
 const webhookRoutes = require('./routes/webhooks');
 const backupRoutes = require('./routes/backup');
+const { createAuthenticationMiddleware } = require('./middleware/authentication');
 
 // Load OpenAPI spec
 let swaggerDocument = null;
@@ -22,15 +23,28 @@ try {
 }
 
 const app = express();
+app.disable('x-powered-by');
 
 // Middleware
-app.use(cors({ origin: config.corsOrigin }));
-app.use(express.json({ limit: '50mb' }));
+if (config.corsOrigins.length > 0) {
+  const allowAnyOrigin = config.corsOrigins.includes('*');
+  app.use(cors({
+    origin(origin, callback) {
+      if (!origin || allowAnyOrigin || config.corsOrigins.includes(origin)) return callback(null, true);
+      const error = new Error('Origin is not allowed by CORS');
+      error.status = 403;
+      return callback(error);
+    },
+  }));
+}
+app.use(express.json({ limit: config.jsonBodyLimit }));
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+app.use(createAuthenticationMiddleware(config));
 
 // Swagger UI & OpenAPI spec
 if (swaggerDocument) {
@@ -65,8 +79,9 @@ app.get('*', (req, res, next) => {
 
 // Error handler
 app.use((err, req, res, _next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+  const status = Number.isInteger(err.status) ? err.status : 500;
+  if (status >= 500) console.error('Unhandled error:', err);
+  res.status(status).json({ error: status === 403 ? err.message : 'Internal server error' });
 });
 
 module.exports = app;

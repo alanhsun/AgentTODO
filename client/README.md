@@ -1,7 +1,7 @@
 # AgentTODO 客户端 (Client)
 
 <!-- @purpose -->
-AgentTODO 的前端界面，采用 React + Vite 构建。提供现代化的响应式 Web UI（包含看板与列表双视图），与无认证 (Zero-Auth) 的后端 API 直接交互，为用户提供直观的任务管理体验。
+AgentTODO 的前端界面，采用 React + Vite 构建。提供现代化的响应式 Web UI（包含列表、看板和日历视图），与本地优先、支持可选 Token 的后端 API 交互，为用户提供直观的任务管理体验。
 <!-- /purpose -->
 
 <!-- @dependencies -->

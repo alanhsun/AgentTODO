@@ -6,7 +6,7 @@
 
 <!-- @dependencies -->
 - Docker 20.10+ 和 Docker Compose V2
-- 或 Node.js 20+ （本地开发）
+- 或 Node.js 20.17+（本地开发）
 <!-- /dependencies -->
 
 ---
@@ -48,11 +48,18 @@ docker-compose up -d
 <!-- /purpose -->
 
 <!-- @input -->
-| 环境变量名称      | 默认值               | 功能说明                   |
-|-----------------|----------------------|------------------------|
-| `PORT`          | `3300`               | 设定后端服务监听端口         |
-| `DB_PATH`       | `/data/tasks.db`     | 指定 SQLite 数据库文件存储路径 |
-| `NODE_ENV`      | `production`         | 标识系统运行环境             |
+| 环境变量名称 | 默认值 | 功能说明 |
+|---|---|---|
+| `HOST` | 本机运行 `127.0.0.1`；Compose `0.0.0.0` | 服务监听地址 |
+| `PORT` | `3300` | 后端服务监听端口 |
+| `DB_PATH` | `/data/tasks.db` | SQLite 数据库文件路径 |
+| `NODE_ENV` | `production` | 运行环境 |
+| `APP_TIMEZONE` | `Asia/Shanghai` | “今天”与定时任务使用的时区 |
+| `API_TOKEN` | 空 | 可选访问令牌；留空仅适用于可信网络 |
+| `API_USERNAME` | `agenttodo` | 浏览器 Basic Auth 用户名 |
+| `CORS_ORIGIN` | 空 | 允许的跨站来源，多个值以逗号分隔 |
+| `WEBHOOK_ALLOW_PRIVATE_NETWORK` | 本机自动允许；Compose 为 `true` | 是否允许回环/局域网 Webhook |
+| `WEBHOOK_ALLOWED_HOSTS` | 空 | 可选 Webhook 主机白名单 |
 <!-- /input -->
 
 ---
@@ -65,10 +72,8 @@ docker-compose up -d
 
 <!-- @input -->
 ```bash
-# 安装根目录和子目录依赖
-npm install
-cd server && npm install
-cd ../client && npm install
+# 在仓库根目录按锁文件安装全部 workspace 依赖
+npm ci
 
 # 启动前后端服务
 # 此时前端会运行在 3300 端口，后端 API 运行在 3301 端口
@@ -122,9 +127,9 @@ docker-compose up -d
 
 ## 🐛 常见问题排查 (FAQ)
 
-### Q: 忘记密码怎么办？
+### Q: 是否必须配置密码？
 <!-- @output -->
-AgentTODO 已经重构为 **本地私有化 (Zero-Auth)** 模式，无需用户登录与密码认证即可访问。
+不必须。本机或完全可信局域网可留空 `API_TOKEN`。在共享局域网中建议设置 Token；忘记后可在 `.env` 中更换并重启容器，不涉及用户账号数据库。
 <!-- /output -->
 
 ### Q: 如何在 Raspberry Pi 上部署？

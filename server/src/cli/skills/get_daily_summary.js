@@ -1,5 +1,5 @@
 const BaseSkill = require('../BaseSkill');
-const axios = require('axios');
+const httpClient = require('../httpClient');
 
 // 为什么需要 BASE_URL？因为我们的 CLI 相当于一个遥控器，它需要知道服务器（主机）的具体地址才能发指令。
 const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
@@ -23,7 +23,7 @@ class GetDailySummarySkill extends BaseSkill {
     try {
       // 为什么用 axios？因为它是 Node.js 里发 HTTP 请求最方便的工具。
       // 它就像一个可靠的快递员，帮我们去后端的 /tasks/summary 接口取数据包裹。
-      const res = await axios.get(`${BASE_URL}/tasks/summary`);
+      const res = await httpClient.get(`${BASE_URL}/tasks/summary`);
       return res.data;
     } catch (error) {
       // 为什么需要 handleError？为了捕获网络断开或者服务器死机等意外，并友好地提示你，而不是让整个程序崩溃。

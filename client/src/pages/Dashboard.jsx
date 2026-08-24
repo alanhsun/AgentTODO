@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { tasksApi, backupApi } from '../api';
 import { useTasks, useTags, useTaskSummary } from '../hooks/useTasks';
 import TaskCard from '../components/TaskCard';
@@ -41,9 +41,10 @@ export default function Dashboard() {
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
   // For kanban and calendar view, fetch more tasks with no status filter
-  const kanbanFilters = { ...filters, limit: 100, status: '' };
+  const kanbanFilters = useMemo(() => ({ ...filters, page: 1, status: '' }), [filters]);
   const { tasks: kanbanTasks, loading: kanbanLoading, refetch: kanbanRefetch } = useTasks(
-    viewMode === 'kanban' || viewMode === 'calendar' ? kanbanFilters : null
+    viewMode === 'kanban' || viewMode === 'calendar' ? kanbanFilters : null,
+    { allPages: true },
   );
 
   const handleCreateOrUpdate = async (data) => {
@@ -146,9 +147,6 @@ export default function Dashboard() {
     e.target.value = null; // reset
   };
 
-  // Summary counts (use kanban tasks when in kanban or calendar mode for accurate totals)
-  const activeTasks = (viewMode === 'kanban' || viewMode === 'calendar') ? kanbanTasks : tasks;
-  
   // Header counts using summary API to get accurate global data
   const todoCnt = summary?.by_status?.todo || 0;
   const inProgressCnt = summary?.by_status?.in_progress || 0;

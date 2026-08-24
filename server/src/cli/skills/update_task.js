@@ -1,5 +1,5 @@
 const BaseSkill = require('../BaseSkill');
-const axios = require('axios');
+const httpClient = require('../httpClient');
 
 // 为什么需要 BASE_URL？因为这是后端服务的主机地址。
 const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
@@ -46,7 +46,7 @@ class UpdateTaskSkill extends BaseSkill {
       }
 
       // 2. 发起 PUT 请求，把新的内容告诉后端
-      const res = await axios.put(`${BASE_URL}/tasks/${args.task_id}`, payload);
+      const res = await httpClient.put(`${BASE_URL}/tasks/${args.task_id}`, payload);
       
       // 3. 把结果返回给你看
       return { message: "任务更新成功", data: res.data };

@@ -2,6 +2,8 @@ const express = require('express');
 const { getDb } = require('../db');
 const { validateTaskInput, validateBatchInput } = require('../validators/task');
 const { triggerWebhook } = require('../services/webhookService');
+const config = require('../config');
+const { dateInTimeZone } = require('../utils/date');
 
 const router = express.Router();
 
@@ -9,7 +11,7 @@ const router = express.Router();
 router.get('/summary', async (req, res) => {
   try {
     const db = getDb();
-    const today = new Date().toISOString().split('T')[0];
+    const today = dateInTimeZone(new Date(), config.appTimezone);
 
     const [total] = await db('tasks').count('* as count');
     const [todo] = await db('tasks').where({ status: 'todo' }).count('* as count');
@@ -47,7 +49,7 @@ router.get('/summary', async (req, res) => {
 router.get('/today', async (req, res) => {
   try {
     const db = getDb();
-    const today = new Date().toISOString().split('T')[0];
+    const today = dateInTimeZone(new Date(), config.appTimezone);
 
     const tasks = await db('tasks')
       .where('status', '!=', 'done')
@@ -56,7 +58,7 @@ router.get('/today', async (req, res) => {
           .orWhere('due_date', '<', today);
       })
       .whereNotNull('due_date')
-      .orderBy('priority', 'desc')
+      .orderByRaw("CASE priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC")
       .orderBy('due_date', 'asc');
 
     const taskIds = tasks.map(t => t.id);
@@ -86,7 +88,7 @@ router.get('/today', async (req, res) => {
 router.get('/overdue', async (req, res) => {
   try {
     const db = getDb();
-    const today = new Date().toISOString().split('T')[0];
+    const today = dateInTimeZone(new Date(), config.appTimezone);
 
     const tasks = await db('tasks')
       .where('status', '!=', 'done')
@@ -167,11 +169,16 @@ router.get('/', async (req, res) => {
     const [totalResult] = await countQuery.count('* as count');
     const total = tag ? (await countQuery).length : totalResult.count;
 
-    const tasks = await query
-      .select('tasks.*')
-      .orderBy(`tasks.${sortCol}`, sortOrder)
-      .limit(limitNum)
-      .offset(offset);
+    query = query.select('tasks.*');
+    if (sortCol === 'priority') {
+      query = query.orderByRaw(
+        `CASE tasks.priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END ${sortOrder.toUpperCase()}`
+      );
+    } else {
+      query = query.orderBy(`tasks.${sortCol}`, sortOrder);
+    }
+
+    const tasks = await query.limit(limitNum).offset(offset);
 
     // Fetch tags for each task
     const taskIds = tasks.map((t) => t.id);
@@ -220,43 +227,50 @@ router.post('/', async (req, res) => {
     const { title, description, status, priority, due_date, recurrence, recurrence_end, tags, subtasks } = req.body;
     const now = new Date().toISOString();
 
-    const [id] = await db('tasks').insert({
-      title: title.trim(),
-      description: description || '',
-      status: status || 'todo',
-      priority: priority || 'medium',
-      due_date: due_date || null,
-      recurrence: recurrence || 'none',
-      recurrence_end: recurrence_end || null,
-      created_at: now,
-      updated_at: now,
-    });
+    if (tags?.length > 0) {
+      const existingTags = await db('tags').whereIn('id', tags).select('id');
+      if (existingTags.length !== new Set(tags).size) {
+        return res.status(400).json({ error: 'One or more tag IDs do not exist' });
+      }
+    }
 
-    // Create subtasks if provided
-    if (subtasks && Array.isArray(subtasks) && subtasks.length > 0) {
-      const subtaskRows = subtasks.map((s, i) => ({
-        task_id: id,
-        title: typeof s === 'string' ? s : s.title,
-        completed: false,
-        sort_order: i,
+    const createdTask = await db.transaction(async (trx) => {
+      const [id] = await trx('tasks').insert({
+        title: title.trim(),
+        description: description || '',
+        status: status || 'todo',
+        priority: priority || 'medium',
+        due_date: due_date || null,
+        recurrence: recurrence || 'none',
+        recurrence_end: recurrence_end || null,
         created_at: now,
-      }));
-      await db('subtasks').insert(subtaskRows);
-    }
+        updated_at: now,
+      });
 
-    // Assign tags
-    if (tags && tags.length > 0) {
-      const tagRows = tags.map((tagId) => ({ task_id: id, tag_id: tagId }));
-      await db('task_tags').insert(tagRows);
-    }
+      if (subtasks && Array.isArray(subtasks) && subtasks.length > 0) {
+        const subtaskRows = subtasks.map((s, i) => ({
+          task_id: id,
+          title: typeof s === 'string' ? s : s.title,
+          completed: false,
+          sort_order: i,
+          created_at: now,
+        }));
+        await trx('subtasks').insert(subtaskRows);
+      }
 
-    const task = await db('tasks').where('id', id).first();
-    const taskTagsResult = await db('task_tags')
-      .join('tags', 'task_tags.tag_id', 'tags.id')
-      .where('task_tags.task_id', id)
-      .select('tags.id', 'tags.name', 'tags.color');
+      if (tags && tags.length > 0) {
+        const tagRows = tags.map((tagId) => ({ task_id: id, tag_id: tagId }));
+        await trx('task_tags').insert(tagRows);
+      }
 
-    const createdTask = { ...task, tags: taskTagsResult };
+      const task = await trx('tasks').where('id', id).first();
+      const taskTagsResult = await trx('task_tags')
+        .join('tags', 'task_tags.tag_id', 'tags.id')
+        .where('task_tags.task_id', id)
+        .select('tags.id', 'tags.name', 'tags.color');
+
+      return { ...task, tags: taskTagsResult };
+    });
     triggerWebhook('task.created', createdTask);
     
     res.status(201).json(createdTask);
@@ -302,6 +316,13 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
+    if (req.body.tags?.length > 0) {
+      const existingTags = await db('tags').whereIn('id', req.body.tags).select('id');
+      if (existingTags.length !== new Set(req.body.tags).size) {
+        return res.status(400).json({ error: 'One or more tag IDs do not exist' });
+      }
+    }
+
     const updates = {};
     const allowedFields = ['title', 'description', 'status', 'priority', 'due_date', 'recurrence', 'recurrence_end'];
     allowedFields.forEach((field) => {
@@ -311,24 +332,25 @@ router.put('/:id', async (req, res) => {
     });
     updates.updated_at = new Date().toISOString();
 
-    await db('tasks').where('id', req.params.id).update(updates);
+    const finalUpdatedTask = await db.transaction(async (trx) => {
+      await trx('tasks').where('id', req.params.id).update(updates);
 
-    // Update tags if provided
-    if (req.body.tags !== undefined) {
-      await db('task_tags').where('task_id', req.params.id).del();
-      if (req.body.tags.length > 0) {
-        const tagRows = req.body.tags.map((tagId) => ({ task_id: parseInt(req.params.id), tag_id: tagId }));
-        await db('task_tags').insert(tagRows);
+      if (req.body.tags !== undefined) {
+        await trx('task_tags').where('task_id', req.params.id).del();
+        if (req.body.tags.length > 0) {
+          const tagRows = req.body.tags.map((tagId) => ({ task_id: parseInt(req.params.id, 10), tag_id: tagId }));
+          await trx('task_tags').insert(tagRows);
+        }
       }
-    }
 
-    const updated = await db('tasks').where('id', req.params.id).first();
-    const tags = await db('task_tags')
-      .join('tags', 'task_tags.tag_id', 'tags.id')
-      .where('task_tags.task_id', req.params.id)
-      .select('tags.id', 'tags.name', 'tags.color');
+      const updated = await trx('tasks').where('id', req.params.id).first();
+      const updatedTags = await trx('task_tags')
+        .join('tags', 'task_tags.tag_id', 'tags.id')
+        .where('task_tags.task_id', req.params.id)
+        .select('tags.id', 'tags.name', 'tags.color');
 
-    const finalUpdatedTask = { ...updated, tags };
+      return { ...updated, tags: updatedTags };
+    });
     triggerWebhook('task.updated', finalUpdatedTask);
 
     res.json(finalUpdatedTask);

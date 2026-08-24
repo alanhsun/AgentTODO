@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db');
+const { validateBackup } = require('../validators/backup');
 
 // GET /api/backup/export - Export all database state as JSON
 router.get('/export', async (req, res) => {
@@ -28,7 +29,8 @@ router.get('/export', async (req, res) => {
     
     res.json(backupData);
   } catch (error) {
-    res.status(500).json({ error: 'Export failed: ' + error.message });
+    console.error('Backup export failed:', error);
+    res.status(500).json({ error: 'Export failed' });
   }
 });
 
@@ -36,9 +38,8 @@ router.get('/export', async (req, res) => {
 router.post('/import', async (req, res) => {
   const backup = req.body;
   
-  if (!backup || !backup.data) {
-    return res.status(400).json({ error: 'Invalid backup format' });
-  }
+  const validationError = validateBackup(backup);
+  if (validationError) return res.status(400).json({ error: validationError });
   
   try {
     const db = getDb();
@@ -63,7 +64,8 @@ router.post('/import', async (req, res) => {
     
     res.json({ message: 'Import successful' });
   } catch (error) {
-    res.status(500).json({ error: 'Import failed: ' + error.message });
+    console.error('Backup import failed:', error);
+    res.status(500).json({ error: 'Import failed' });
   }
 });
 

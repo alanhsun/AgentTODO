@@ -21,39 +21,37 @@ const RECURRENCE_OPTIONS = [
   { value: 'monthly', label: '每月' },
 ];
 
-export default function TaskForm({ task, tags, onSubmit, onCancel }) {
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    status: 'todo',
-    priority: 'medium',
-    due_date: '',
-    recurrence: 'none',
-    recurrence_end: '',
-    tags: [],
+function createInitialForm(task) {
+  return {
+    title: task?.title || '',
+    description: task?.description || '',
+    status: task?.status || 'todo',
+    priority: task?.priority || 'medium',
+    due_date: task?.due_date ? task.due_date.split('T')[0] : '',
+    recurrence: task?.recurrence || 'none',
+    recurrence_end: task?.recurrence_end ? task.recurrence_end.split('T')[0] : '',
+    tags: task?.tags?.map((tag) => tag.id) || [],
     subtasks: [],
-  });
+  };
+}
+
+export default function TaskForm({ task, tags, onSubmit, onCancel }) {
+  const [form, setForm] = useState(() => createInitialForm(task));
   const [newSubtask, setNewSubtask] = useState('');
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
 
   useEffect(() => {
-    if (task) {
-      setForm({
-        title: task.title || '',
-        description: task.description || '',
-        status: task.status || 'todo',
-        priority: task.priority || 'medium',
-        due_date: task.due_date ? task.due_date.split('T')[0] : '',
-        recurrence: task.recurrence || 'none',
-        recurrence_end: task.recurrence_end ? task.recurrence_end.split('T')[0] : '',
-        tags: task.tags?.map((t) => t.id) || [],
-        subtasks: [],
-      });
-      tasksApi.listNotes(task.id)
-        .then(setNotes)
-        .catch((err) => console.error('Failed to load notes:', err));
-    }
+    if (!task) return undefined;
+
+    let active = true;
+    tasksApi.listNotes(task.id)
+      .then((loadedNotes) => {
+        if (active) setNotes(loadedNotes);
+      })
+      .catch((err) => console.error('Failed to load notes:', err));
+
+    return () => { active = false; };
   }, [task]);
 
   const handleSubmit = (e) => {

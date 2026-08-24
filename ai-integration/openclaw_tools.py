@@ -1,14 +1,18 @@
-import requests
 import json
+import os
+import requests
 from typing import List, Optional, Dict, Any
 
 # Task Tracker API Base URL
-BASE_URL = "http://localhost:3300/api"
+BASE_URL = os.getenv("AGENTTODO_URL", "http://localhost:3300/api")
+SESSION = requests.Session()
+if os.getenv("AGENTTODO_API_TOKEN"):
+    SESSION.headers.update({"Authorization": f"Bearer {os.environ['AGENTTODO_API_TOKEN']}"})
 
 def get_daily_summary() -> str:
     """获取当前任务的完整统计概览（包含总数、今日待办数、逾期数统计）。AI 每日初次对话前应调用此工具。"""
     try:
-        response = requests.get(f"{BASE_URL}/tasks/summary")
+        response = SESSION.get(f"{BASE_URL}/tasks/summary")
         response.raise_for_status()
         return json.dumps(response.json(), ensure_ascii=False)
     except Exception as e:
@@ -17,7 +21,7 @@ def get_daily_summary() -> str:
 def get_today_agenda() -> str:
     """获取今日到期以及已逾期的所有任务详情。包含被分解的子任务完成进度。"""
     try:
-        response = requests.get(f"{BASE_URL}/tasks/today")
+        response = SESSION.get(f"{BASE_URL}/tasks/today")
         response.raise_for_status()
         return json.dumps(response.json(), ensure_ascii=False)
     except Exception as e:
@@ -26,7 +30,7 @@ def get_today_agenda() -> str:
 def get_user_tags() -> str:
     """获取用户当前正在使用的所有标签。在分析用户生活节奏、或者创建新任务之前，应调用此工具规范化任务分类。"""
     try:
-        response = requests.get(f"{BASE_URL}/tags")
+        response = SESSION.get(f"{BASE_URL}/tags")
         response.raise_for_status()
         return json.dumps(response.json(), ensure_ascii=False)
     except Exception as e:
@@ -53,7 +57,7 @@ def create_task(title: str, priority: str = 'medium', due_date: Optional[str] = 
         payload["tags"] = tags
 
     try:
-        response = requests.post(f"{BASE_URL}/tasks", json=payload)
+        response = SESSION.post(f"{BASE_URL}/tasks", json=payload)
         response.raise_for_status()
         return f"Task created successfully. Details: {json.dumps(response.json(), ensure_ascii=False)}"
     except Exception as e:
@@ -79,7 +83,7 @@ def update_task(task_id: int, title: Optional[str] = None, priority: Optional[st
         return json.dumps({"error": "No fields to update provided."})
 
     try:
-        response = requests.put(f"{BASE_URL}/tasks/{task_id}", json=payload)
+        response = SESSION.put(f"{BASE_URL}/tasks/{task_id}", json=payload)
         response.raise_for_status()
         return f"Task updated successfully. Details: {json.dumps(response.json(), ensure_ascii=False)}"
     except Exception as e:
@@ -95,19 +99,19 @@ def add_task_progress_note(task_id: int, note_content: str, complete_subtasks: O
     results = []
     try:
         # 1. 添加追踪笔记
-        note_res = requests.post(f"{BASE_URL}/tasks/{task_id}/notes", json={"content": note_content, "source": "ai"})
+        note_res = SESSION.post(f"{BASE_URL}/tasks/{task_id}/notes", json={"content": note_content, "source": "ai"})
         note_res.raise_for_status()
         results.append("Note added.")
 
         # 2. 勾选子任务
         if complete_subtasks:
             for sid in complete_subtasks:
-                requests.put(f"{BASE_URL}/tasks/{task_id}/subtasks/{sid}", json={"completed": True})
+                SESSION.put(f"{BASE_URL}/tasks/{task_id}/subtasks/{sid}", json={"completed": True})
             results.append(f"Subtasks {complete_subtasks} marked as completed.")
 
         # 3. 更新主任务状态
         if task_status in ['todo', 'in_progress', 'done']:
-            requests.put(f"{BASE_URL}/tasks/{task_id}", json={"status": task_status})
+            SESSION.put(f"{BASE_URL}/tasks/{task_id}", json={"status": task_status})
             results.append(f"Task status updated to {task_status}.")
 
         return "\n".join(results)

@@ -6,5 +6,7 @@ coverage/
 *.db-journal
 .env
 *.log
+__pycache__/
+*.py[cod]
 .DS_Store
 Thumbs.db

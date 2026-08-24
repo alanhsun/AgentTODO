@@ -29,8 +29,8 @@ router.post('/:taskId/subtasks', async (req, res) => {
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
     const { title } = req.body;
-    if (!title || typeof title !== 'string' || title.trim().length === 0) {
-      return res.status(400).json({ error: 'Title is required' });
+    if (!title || typeof title !== 'string' || title.trim().length === 0 || title.length > 255) {
+      return res.status(400).json({ error: 'Title must be between 1 and 255 characters' });
     }
 
     const [maxOrder] = await db('subtasks').where('task_id', req.params.taskId).max('sort_order as max');
@@ -64,8 +64,22 @@ router.put('/:taskId/subtasks/:id', async (req, res) => {
     if (!subtask) return res.status(404).json({ error: 'Subtask not found' });
 
     const updates = {};
-    if (req.body.title !== undefined) updates.title = req.body.title.trim();
-    if (req.body.completed !== undefined) updates.completed = req.body.completed ? 1 : 0;
+    if (req.body.title !== undefined) {
+      if (typeof req.body.title !== 'string' || req.body.title.trim().length === 0 || req.body.title.length > 255) {
+        return res.status(400).json({ error: 'Title must be between 1 and 255 characters' });
+      }
+      updates.title = req.body.title.trim();
+    }
+    if (req.body.completed !== undefined) {
+      if (typeof req.body.completed !== 'boolean') {
+        return res.status(400).json({ error: 'completed must be a boolean' });
+      }
+      updates.completed = req.body.completed ? 1 : 0;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
 
     await db('subtasks').where('id', req.params.id).update(updates);
     const updated = await db('subtasks').where('id', req.params.id).first();
@@ -122,6 +136,9 @@ router.post('/:taskId/notes', async (req, res) => {
     const { content, source } = req.body;
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
       return res.status(400).json({ error: 'Content is required' });
+    }
+    if (source !== undefined && !['user', 'ai'].includes(source)) {
+      return res.status(400).json({ error: 'source must be user or ai' });
     }
 
     const [id] = await db('task_notes').insert({

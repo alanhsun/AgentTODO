@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "AI 驱动的极简本地任务系统 - AgentTODO",
   "private": true,
+  "license": "MIT",
   "workspaces": [
     "server",
     "client"
@@ -13,10 +14,28 @@
     "dev:client": "cd client && npm run dev",
     "start": "cd server && npm start",
     "build:client": "cd client && npm run build",
+    "lint": "npm run lint --workspace=client",
     "test": "cd server && npm test",
     "test:coverage": "cd server && npm run test:coverage"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=20.17.0"
+  },
+  "allowScripts": {
+    "sqlite3@6.0.1": true,
+    "esbuild@0.28.2": true,
+    "@scarf/scarf": false
+  },
+  "overrides": {
+    "body-parser": "1.20.6",
+    "follow-redirects": "1.16.0",
+    "form-data": "4.0.6",
+    "lodash": "4.18.1",
+    "path-to-regexp": "0.1.13",
+    "picomatch": "4.0.5",
+    "qs": "6.15.3"
   }
 }

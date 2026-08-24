@@ -70,7 +70,7 @@ describe('文档结构自动化测试', () => {
     
     // 应该在 description 里包含机器可读的 purpose
     expect(openapiContent).toContain('<!-- @purpose -->');
-    // 不应该包含 jwt 或 BearerAuth 认证逻辑（因为系统已重构为 Zero-Auth）
+    // 认证是部署时的可选项，不应在规范中强制要求 JWT/BearerAuth。
     expect(openapiContent).not.toContain('BearerAuth');
   });
 });

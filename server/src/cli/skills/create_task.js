@@ -1,5 +1,5 @@
 const BaseSkill = require('../BaseSkill');
-const axios = require('axios');
+const httpClient = require('../httpClient');
 
 // 为什么需要 BASE_URL？因为我们的 CLI 相当于一个遥控器，它需要知道服务器（主机）的具体地址才能发指令。
 const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
@@ -46,7 +46,7 @@ class CreateTaskSkill extends BaseSkill {
       if (args.tags) payload.tags = args.tags;
 
       // 2. 为什么用 axios？它像是一个可靠的快递员，帮我们把包裹发给后端的 /tasks 接口。
-      const res = await axios.post(`${BASE_URL}/tasks`, payload);
+      const res = await httpClient.post(`${BASE_URL}/tasks`, payload);
       
       // 3. 返回成功的结果给命令行界面
       return { message: "任务创建成功", data: res.data };

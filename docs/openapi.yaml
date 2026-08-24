@@ -2,15 +2,32 @@ openapi: 3.0.3
 info:
   title: AgentTODO API
   description: >
-    <!-- @purpose -->AI 驱动的任务系统 RESTful API，专为本地私有化 (Zero-Auth) 环境设计，无缝对接 AI 助手和命令行技能系统。<!-- /purpose -->
+    <!-- @purpose -->AI 驱动的本地优先任务系统 RESTful API，支持可信网络免认证或可选 API Token，无缝对接 AI 助手和命令行技能系统。<!-- /purpose -->
   version: 1.0.0
   contact:
     name: AgentTODO
+  license:
+    name: MIT
+    url: https://github.com/alanhsun/AgentTODO/blob/main/LICENSE
 servers:
   - url: http://localhost:3300
     description: 本地开发
 
+# API_TOKEN 未设置时允许匿名访问；设置后使用以下任一认证方式。
+security:
+  - bearerToken: []
+  - basicAuth: []
+  - {}
+
 components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+    basicAuth:
+      type: http
+      scheme: basic
+
   schemas:
     Tag:
       type: object
@@ -43,6 +60,13 @@ components:
           type: string
           format: date
           nullable: true
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
+        recurrence_end:
+          type: string
+          format: date
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -53,6 +77,37 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Tag'
+
+    Subtask:
+      type: object
+      properties:
+        id: { type: integer }
+        task_id: { type: integer }
+        title: { type: string }
+        completed: { type: boolean }
+        sort_order: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    TaskNote:
+      type: object
+      properties:
+        id: { type: integer }
+        task_id: { type: integer }
+        content: { type: string }
+        source: { type: string, enum: [user, ai] }
+        created_at: { type: string, format: date-time }
+
+    Webhook:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
 
     TaskCreateInput:
       type: object
@@ -75,10 +130,28 @@ components:
           type: string
           format: date
           nullable: true
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
+          default: none
+        recurrence_end:
+          type: string
+          format: date
+          nullable: true
         tags:
           type: array
           items:
             type: integer
+          uniqueItems: true
+        subtasks:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: object
+                required: [title]
+                properties:
+                  title: { type: string, maxLength: 255 }
 
     TaskUpdateInput:
       type: object
@@ -98,10 +171,18 @@ components:
           type: string
           format: date
           nullable: true
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
+        recurrence_end:
+          type: string
+          format: date
+          nullable: true
         tags:
           type: array
           items:
             type: integer
+          uniqueItems: true
 
     BatchInput:
       type: object
@@ -156,6 +237,63 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
+
+  /api/tasks/summary:
+    get:
+      summary: 获取任务统计概览
+      tags: [Tasks]
+      responses:
+        '200':
+          description: 全局任务统计
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  by_status:
+                    type: object
+                    additionalProperties: { type: integer }
+                  overdue: { type: integer }
+                  due_today: { type: integer }
+                  by_priority:
+                    type: object
+                    additionalProperties: { type: integer }
+                  date: { type: string, format: date }
+
+  /api/tasks/today:
+    get:
+      summary: 获取今日及逾期任务
+      tags: [Tasks]
+      responses:
+        '200':
+          description: 今日任务列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date: { type: string, format: date }
+                  tasks:
+                    type: array
+                    items: { $ref: '#/components/schemas/Task' }
+
+  /api/tasks/overdue:
+    get:
+      summary: 获取逾期任务
+      tags: [Tasks]
+      responses:
+        '200':
+          description: 逾期任务列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date: { type: string, format: date }
+                  tasks:
+                    type: array
+                    items: { $ref: '#/components/schemas/Task' }
 
   /api/tasks:
     get:
@@ -368,6 +506,129 @@ paths:
         '400':
           description: 参数错误
 
+  /api/tasks/{taskId}/subtasks:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      summary: 获取子任务
+      tags: [Subtasks]
+      responses:
+        '200':
+          description: 子任务列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Subtask' }
+    post:
+      summary: 新增子任务
+      tags: [Subtasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, maxLength: 255 }
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subtask' }
+
+  /api/tasks/{taskId}/subtasks/{id}:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+    put:
+      summary: 更新子任务
+      tags: [Subtasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 255 }
+                completed: { type: boolean }
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subtask' }
+    delete:
+      summary: 删除子任务
+      tags: [Subtasks]
+      responses:
+        '200': { description: 删除成功 }
+
+  /api/tasks/{taskId}/notes:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      summary: 获取任务纪要
+      tags: [Notes]
+      responses:
+        '200':
+          description: 纪要列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TaskNote' }
+    post:
+      summary: 新增任务纪要
+      tags: [Notes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+                source: { type: string, enum: [user, ai], default: user }
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskNote' }
+
+  /api/tasks/{taskId}/notes/{id}:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+    delete:
+      summary: 删除任务纪要
+      tags: [Notes]
+      responses:
+        '200': { description: 删除成功 }
+
   /api/tags:
     get:
       summary: 获取标签列表
@@ -455,3 +716,77 @@ paths:
           description: 删除成功
         '404':
           description: 标签不存在
+
+  /api/webhooks:
+    get:
+      summary: 获取 Webhook 列表
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Webhook 列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Webhook' }
+    post:
+      summary: 注册 Webhook
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url]
+              properties:
+                name: { type: string, maxLength: 100 }
+                url: { type: string, format: uri, maxLength: 2048 }
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [task.created, task.updated, task.overdue, '*']
+      responses:
+        '201':
+          description: 注册成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Webhook' }
+        '400': { description: URL、主机或事件配置无效 }
+
+  /api/backup/export:
+    get:
+      summary: 导出完整 JSON 备份
+      tags: [Backup]
+      responses:
+        '200':
+          description: 版本化备份对象
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, timestamp, data]
+                properties:
+                  version: { type: integer, enum: [1] }
+                  timestamp: { type: string, format: date-time }
+                  data: { type: object }
+
+  /api/backup/import:
+    post:
+      summary: 导入完整 JSON 备份
+      description: 在单个数据库事务中替换现有数据。
+      tags: [Backup]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, data]
+              properties:
+                version: { type: integer, enum: [1] }
+                data: { type: object }
+      responses:
+        '200': { description: 导入成功 }
+        '400': { description: 备份格式无效 }

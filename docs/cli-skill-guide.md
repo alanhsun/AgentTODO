@@ -7,6 +7,8 @@
 你好！欢迎来到 AgentTODO 的 CLI 技能系统。
 为了让 AI 助手能够更轻量、更灵活地操作任务，我们将原来的 MCP（Model Context Protocol）替换为了**基于命令行的可插拔技能系统 (Skill System)**。
 
+CLI 默认访问 `AGENTTODO_URL`（未设置时为本地开发服务）。如果服务启用了 `API_TOKEN`，请同时设置同值的 `AGENTTODO_API_TOKEN`；内置技能会自动使用 Bearer Token，免认证模式下请求行为不变。
+
 这篇文档将用最简单的话，教你如何使用和开发新的技能。
 
 ---

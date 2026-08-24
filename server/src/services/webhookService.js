@@ -1,5 +1,7 @@
 const axios = require('axios');
 const { getDb } = require('../db');
+const config = require('../config');
+const { validateWebhookUrl, createWebhookLookup } = require('../utils/webhookUrl');
 
 async function triggerWebhook(event, payload) {
   try {
@@ -16,11 +18,29 @@ async function triggerWebhook(event, payload) {
       }
 
       if (eventsArray.includes(event) || eventsArray.includes('*')) {
-        axios.post(hook.url, {
-          event: event,
+        let validatedUrl;
+        try {
+          validatedUrl = await validateWebhookUrl(hook.url, {
+            allowPrivateNetwork: config.webhookAllowPrivateNetwork,
+            allowedHosts: config.webhookAllowedHosts,
+          });
+        } catch (validationError) {
+          console.warn(`Webhook blocked [${hook.name}]:`, validationError.message);
+          continue;
+        }
+
+        await axios.post(validatedUrl, {
+          event,
           timestamp: new Date().toISOString(),
           data: payload
-        }, { timeout: 5000 }).catch(e => console.warn(`Webhook failed [${hook.name}]:`, e.message));
+        }, {
+          timeout: 5000,
+          maxRedirects: 0,
+          maxContentLength: 1024 * 1024,
+          maxBodyLength: 1024 * 1024,
+          proxy: false,
+          lookup: createWebhookLookup({ allowPrivateNetwork: config.webhookAllowPrivateNetwork }),
+        }).catch(e => console.warn(`Webhook failed [${hook.name}]:`, e.message));
       }
     }
   } catch (err) {

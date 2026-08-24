@@ -1,5 +1,5 @@
 const BaseSkill = require('../BaseSkill');
-const axios = require('axios');
+const httpClient = require('../httpClient');
 
 // 为什么需要 BASE_URL？因为我们需要知道服务器的具体地址才能发请求。
 const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
@@ -21,7 +21,7 @@ class GetTodayAgendaSkill extends BaseSkill {
   async execute(args) {
     try {
       // 去后端的 /tasks/today 接口获取今天的任务列表
-      const res = await axios.get(`${BASE_URL}/tasks/today`);
+      const res = await httpClient.get(`${BASE_URL}/tasks/today`);
       return res.data;
     } catch (error) {
       // 遇到报错，交给基类统一处理，保证输出格式一致

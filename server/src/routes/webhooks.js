@@ -1,5 +1,7 @@
 const express = require('express');
 const { getDb } = require('../db');
+const config = require('../config');
+const { validateWebhookUrl } = require('../utils/webhookUrl');
 
 const router = express.Router();
 
@@ -20,13 +22,32 @@ router.post('/', async (req, res) => {
     const db = getDb();
     const { name, url, events } = req.body;
 
-    if (!name || !url) {
+    if (!name || typeof name !== 'string' || !url || typeof url !== 'string') {
       return res.status(400).json({ error: 'Name and URL are required' });
+    }
+    if (name.trim().length > 100) {
+      return res.status(400).json({ error: 'Webhook name must be 100 characters or less' });
+    }
+    const allowedEvents = ['task.created', 'task.updated', 'task.overdue', '*'];
+    if (events !== undefined && (!Array.isArray(events)
+      || events.length === 0
+      || events.some((event) => !allowedEvents.includes(event)))) {
+      return res.status(400).json({ error: `Events must contain only: ${allowedEvents.join(', ')}` });
+    }
+
+    let validatedUrl;
+    try {
+      validatedUrl = await validateWebhookUrl(url, {
+        allowPrivateNetwork: config.webhookAllowPrivateNetwork,
+        allowedHosts: config.webhookAllowedHosts,
+      });
+    } catch (validationError) {
+      return res.status(400).json({ error: validationError.message });
     }
 
     const [id] = await db('webhooks').insert({
       name: name.trim(),
-      url: url.trim(),
+      url: validatedUrl,
       events: events ? JSON.stringify(events) : JSON.stringify(['task.created', 'task.updated', 'task.overdue']),
       is_active: true,
       created_at: new Date().toISOString()

@@ -7,33 +7,59 @@ on:
   workflow_dispatch: # 允许在 GitHub 网页上手动点击运行
 
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Test, lint and build
+        run: |
+          npm test
+          npm run lint
+          npm run build:client
+
   build-and-push:
     # 运行在 GitHub 提供的一台免费的 Ubuntu 虚拟机上
     runs-on: ubuntu-latest
+    needs: quality
 
     steps:
       # 第1步：把你的代码拉取到这台虚拟机里
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
 
       # 第2步：安装 Docker 的构建工具（用来打包镜像）
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # 第3步：登录到 Docker Hub
       # ⚠️ 安全警告：密码绝对不能写在代码里！所以我们用 secrets（仓库密钥）来读取。
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # 第4步：构建 Docker 镜像，并把它推送到 Docker Hub
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           # 镜像的名字将是：你的用户名/agenttodo:latest
           # 注意：Docker 镜像名称必须全部小写，且不能包含特殊字符
           tags: alansundy/agenttodo:latest
+          platforms: linux/amd64,linux/arm64

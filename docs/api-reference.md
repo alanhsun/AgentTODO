@@ -2,7 +2,7 @@
 
 <!-- @purpose -->
 本文档详细定义了 AgentTODO 系统的 RESTful API 接口规范，专为 AI 助手及前端客户端调用设计。
-整个系统已重构为 **本地私有化 (Zero-Auth)** 模式，无需传递任何 JWT 认证信息即可直接访问所有接口。
+系统采用本地优先模式：未设置 `API_TOKEN` 时无需认证；设置后可用浏览器 Basic Auth、Bearer Token 或 `X-API-Token` 请求头访问。系统不包含用户注册、JWT 或多用户权限模型。
 <!-- /purpose -->
 
 <!-- @dependencies -->
@@ -11,6 +11,14 @@
 - API 规范: OpenAPI 3.0 (可访问 `/api/openapi.json` 获取)
 - 交互式文档: 浏览器访问 `/api-docs` 查看 Swagger UI
 <!-- /dependencies -->
+
+启用 `API_TOKEN` 后，脚本调用示例：
+
+```http
+Authorization: Bearer <API_TOKEN>
+```
+
+`GET /api/health` 始终免认证，用于本地和容器健康检查。
 
 ---
 

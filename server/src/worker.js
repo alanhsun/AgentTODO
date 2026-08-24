@@ -1,6 +1,8 @@
 const cron = require('node-cron');
 const { getDb } = require('./db');
 const { triggerWebhook } = require('./services/webhookService');
+const config = require('./config');
+const { dateInTimeZone } = require('./utils/date');
 
 function initWorkers() {
   console.log('Webhook worker initialized: listening for overdue tasks');
@@ -10,7 +12,7 @@ function initWorkers() {
     try {
       console.log('[CronWorker] Running overdue task check...');
       const db = getDb();
-      const today = new Date().toISOString().split('T')[0];
+      const today = dateInTimeZone(new Date(), config.appTimezone);
 
       const overdueTasks = await db('tasks')
         .where('status', '!=', 'done')
@@ -20,7 +22,7 @@ function initWorkers() {
       if (overdueTasks.length > 0) {
         console.log(`[CronWorker] Found ${overdueTasks.length} overdue tasks.`);
         // 推送给 AI: "老板，你昨天有些任务没做完！"
-        triggerWebhook('task.overdue', {
+        await triggerWebhook('task.overdue', {
           count: overdueTasks.length,
           tasks: overdueTasks
         });
@@ -28,7 +30,7 @@ function initWorkers() {
     } catch (e) {
       console.error('[CronWorker] Error:', e.message);
     }
-  });
+  }, { timezone: config.appTimezone });
 
   // 每5分钟检查是否有将于 1 小时内到期的任务 (假设增加 due_time 字段或高频扫描，这里仅示范全盘扫描不频繁)
 }

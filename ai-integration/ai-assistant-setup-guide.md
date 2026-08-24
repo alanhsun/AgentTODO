@@ -34,7 +34,9 @@
 为 AI 助手配置 6 个核心的 REST API 技能，使其能够实际读写 AgentTODO 系统数据。
 <!-- /purpose -->
 
-> **说明**：AgentTODO 已全面重构为**免认证 (Zero-Auth)** 架构，AI 直接发起 HTTP 请求即可。
+> **说明**：未设置 `API_TOKEN` 时，AI 可像以前一样直接发起 HTTP 请求。若启用了 Token，请为所有 API 请求增加 `Authorization: Bearer <API_TOKEN>`；健康检查除外。
+
+使用仓库自带的 `openclaw_tools.py` 时，可设置 `AGENTTODO_URL` 和 `AGENTTODO_API_TOKEN` 环境变量，脚本会自动附加认证请求头。
 
 请在 AI 的 **工具配置 / 插件管理** 界面，逐一添加以下 6 个 API 技能：
 

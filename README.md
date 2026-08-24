@@ -5,11 +5,11 @@
 </p>
 
 <!-- @purpose -->
-**AgentTODO** 是一个专为 AI 助手（如 OpenClaw、ChatGPT、Coze 等）设计的轻量级、本地化任务管理中枢。它提供现代化的响应式 Web UI（看板 + 列表视图），并通过**命令行技能系统 (CLI Skill System)** 和**无认证 REST API** 暴露能力，使 AI 助理能够作为执行力教练直接读写任务数据。
+**AgentTODO** 是一个专为 AI 助手（如 OpenClaw、ChatGPT、Coze 等）设计的轻量级、本地化任务管理中枢。它提供现代化的响应式 Web UI（看板 + 列表视图），并通过**命令行技能系统 (CLI Skill System)** 和 REST API 暴露能力，使 AI 助理能够作为执行力教练直接读写任务数据。可信本地环境可保持免认证，也可为局域网访问启用轻量 API Token。
 <!-- /purpose -->
 
 <!-- @dependencies -->
-- Node.js >= 20 或 Docker 20.10+
+- Node.js >= 20.17 或 Docker 20.10+
 - 现代浏览器 (Chrome, Firefox, Safari)
 <!-- /dependencies -->
 
@@ -19,7 +19,7 @@
 
 <!-- @features -->
 - 🤖 **AI Native CLI 技能系统**：提供专门为大语言模型优化的命令行交互模式（支持热加载），AI 可以通过标准输入输出直接操作任务大盘，摆脱复杂的网络协议配置。
-- 🔓 **本地私有化 (Zero-Auth)**：专为本地受信任网络设计，去除 JWT 用户注册与登录等繁琐流程，大模型和本地脚本直接无缝集成调用。
+- 🔐 **本地优先、按需保护**：本机默认只监听回环地址；可信网络可免认证，局域网也可启用 API Token，不引入用户注册系统。
 - 🔄 **周期任务 & 子任务分解**：支持设置每日/每周重复习惯。AI 能够主动将宏大目标（如“旅行规划”）拆解为子步骤并持续追踪。
 - 🔔 **Webhook 主动推送支持**：内置 Node-Cron 定时任务扫描。当任务逾期时，主动向 AI 系统发送 HTTP Push 触发提醒。
 - 🎨 **双视图自由切换**：支持“列表(List)”与“看板(Kanban)”视角，并自带深/浅色模式切换。
@@ -48,9 +48,13 @@ services:
       - task-data:/data
     environment:
       - NODE_ENV=production
+      - HOST=0.0.0.0
       - PORT=3300
       - AGENTTODO_URL=http://localhost:3300/api
       - DB_PATH=/data/tasks.db
+      - APP_TIMEZONE=Asia/Shanghai
+      - API_TOKEN=${API_TOKEN:-}
+      - WEBHOOK_ALLOW_PRIVATE_NETWORK=true
 
 volumes:
   task-data:
@@ -69,6 +73,16 @@ docker-compose up -d
 <!-- @output -->
 服务将在后台运行。打开浏览器访问 👉 **[http://localhost:3300](http://localhost:3300)** 即可使用 Web 界面。
 <!-- /output -->
+
+### 局域网安全配置
+
+默认 Compose 配置保留局域网访问和私网 Webhook，以符合家庭服务器与本地 AI 助手的使用场景。如果局域网并非完全可信，请先复制 `.env.example` 为 `.env`，并设置一个较长的随机 `API_TOKEN`。启用后：
+
+- 浏览器使用用户名 `agenttodo`（可由 `API_USERNAME` 修改）和该 Token 进行 HTTP Basic Auth；
+- API 客户端使用 `Authorization: Bearer <token>` 或 `X-API-Token: <token>`；
+- `/api/health` 保持免认证，便于容器健康检查。
+
+跨站浏览器访问默认关闭；确有需要时，通过逗号分隔的 `CORS_ORIGIN` 显式指定可信来源。
 
 ---
 
@@ -98,7 +112,7 @@ git clone https://github.com/alanhsun/AgentTODO.git
 cd AgentTODO
 
 # 2. 安装依赖并启动 (前端与后端)
-npm install
+npm ci
 npm run dev
 ```
 <!-- /input -->

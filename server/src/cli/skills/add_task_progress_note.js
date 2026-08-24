@@ -1,5 +1,5 @@
 const BaseSkill = require('../BaseSkill');
-const axios = require('axios');
+const httpClient = require('../httpClient');
 
 // 为什么需要 BASE_URL？这是后端服务的主机地址。
 const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
@@ -40,7 +40,7 @@ class AddTaskProgressNoteSkill extends BaseSkill {
       const taskId = args.task_id;
       
       // 第一件事：给任务加一条笔记
-      const noteRes = await axios.post(`${BASE_URL}/tasks/${taskId}/notes`, {
+      const noteRes = await httpClient.post(`${BASE_URL}/tasks/${taskId}/notes`, {
         content: args.note_content,
         source: 'ai' // 标记这是 AI（或命令行）写的笔记
       });
@@ -50,14 +50,14 @@ class AddTaskProgressNoteSkill extends BaseSkill {
       if (args.complete_subtasks && Array.isArray(args.complete_subtasks)) {
         for (const sid of args.complete_subtasks) {
           // 对每个子任务发送更新请求
-          await axios.put(`${BASE_URL}/tasks/${taskId}/subtasks/${sid}`, { completed: true });
+          await httpClient.put(`${BASE_URL}/tasks/${taskId}/subtasks/${sid}`, { completed: true });
         }
         results.push({ action: "subtasks_completed", ids: args.complete_subtasks });
       }
 
       // 第三件事：如果主任务整体做完了或者刚开始，更新整个任务的状态
       if (args.task_status) {
-        await axios.put(`${BASE_URL}/tasks/${taskId}`, { status: args.task_status });
+        await httpClient.put(`${BASE_URL}/tasks/${taskId}`, { status: args.task_status });
         results.push({ action: "status_updated", status: args.task_status });
       }
 

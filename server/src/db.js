@@ -15,6 +15,9 @@ function getDb() {
 async function initDb() {
   const instance = getDb();
   await instance.migrate.latest();
+  if (config.nodeEnv !== 'test') {
+    await instance.raw('PRAGMA journal_mode = WAL');
+  }
   return instance;
 }
 

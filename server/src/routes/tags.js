@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../db');
 
 const router = express.Router();
+const COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 // GET /api/tags - List all tags
 router.get('/', async (req, res) => {
@@ -41,6 +42,12 @@ router.post('/', async (req, res) => {
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Tag name is required' });
     }
+    if (name.trim().length > 50) {
+      return res.status(400).json({ error: 'Tag name must be 50 characters or less' });
+    }
+    if (color !== undefined && (typeof color !== 'string' || !COLOR_PATTERN.test(color))) {
+      return res.status(400).json({ error: 'Color must be a six-digit hex value' });
+    }
 
     const existing = await db('tags').where({ name: name.trim() }).first();
     if (existing) {
@@ -70,8 +77,18 @@ router.put('/:id', async (req, res) => {
     }
 
     const updates = {};
-    if (req.body.name !== undefined) updates.name = req.body.name.trim();
-    if (req.body.color !== undefined) updates.color = req.body.color;
+    if (req.body.name !== undefined) {
+      if (typeof req.body.name !== 'string' || req.body.name.trim().length === 0 || req.body.name.trim().length > 50) {
+        return res.status(400).json({ error: 'Tag name must be between 1 and 50 characters' });
+      }
+      updates.name = req.body.name.trim();
+    }
+    if (req.body.color !== undefined) {
+      if (typeof req.body.color !== 'string' || !COLOR_PATTERN.test(req.body.color)) {
+        return res.status(400).json({ error: 'Color must be a six-digit hex value' });
+      }
+      updates.color = req.body.color;
+    }
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
