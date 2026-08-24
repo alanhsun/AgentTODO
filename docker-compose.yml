@@ -22,6 +22,8 @@ services:
       # 留空保持原有零认证模式；在非完全可信的局域网中建议设置长随机值。
       - API_TOKEN=${API_TOKEN:-}
       - API_USERNAME=${API_USERNAME:-agenttodo}
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - JSON_BODY_LIMIT=${JSON_BODY_LIMIT:-50mb}
       - AGENTTODO_API_TOKEN=${API_TOKEN:-}
       # 本项目的 Webhook 通常指向局域网 AI 服务，因此在 Compose 中显式保留该能力。
       - WEBHOOK_ALLOW_PRIVATE_NETWORK=${WEBHOOK_ALLOW_PRIVATE_NETWORK:-true}

@@ -26,6 +26,7 @@ async function readDatabaseData(db, includeAttachments = false) {
     task_tags: await db('task_tags'),
     subtasks: await db('subtasks'),
     task_notes: await db('task_notes'),
+    task_occurrences: await db('task_occurrences'),
     webhooks: await db('webhooks'),
   };
   if (includeAttachments) data.task_attachments = await db('task_attachments');
@@ -34,6 +35,8 @@ async function readDatabaseData(db, includeAttachments = false) {
 
 async function replaceDatabaseData(trx, data, includeAttachments = false) {
   await trx('task_attachments').del();
+  await trx('agent_requests').del();
+  await trx('task_occurrences').del();
   await trx('task_tags').del();
   await trx('subtasks').del();
   await trx('task_notes').del();
@@ -46,6 +49,7 @@ async function replaceDatabaseData(trx, data, includeAttachments = false) {
   if (data.task_tags?.length > 0) await trx('task_tags').insert(data.task_tags);
   if (data.subtasks?.length > 0) await trx('subtasks').insert(data.subtasks);
   if (data.task_notes?.length > 0) await trx('task_notes').insert(data.task_notes);
+  if (data.task_occurrences?.length > 0) await trx('task_occurrences').insert(data.task_occurrences);
   if (data.webhooks?.length > 0) await trx('webhooks').insert(data.webhooks);
   if (includeAttachments && data.task_attachments?.length > 0) {
     await trx('task_attachments').insert(data.task_attachments);
@@ -135,7 +139,7 @@ router.get('/export.zip', async (req, res) => {
     await Promise.all(data.task_attachments.map((attachment) => fs.access(resolveStoredPath(attachment.stored_name))));
 
     const backup = {
-      version: 2,
+      version: 3,
       format: 'agenttodo-full',
       timestamp: new Date().toISOString(),
       data,
@@ -199,7 +203,7 @@ async function restoreFullArchive(archivePath) {
   } catch (_error) {
     throw new Error('Archive manifest is not valid JSON');
   }
-  const validationError = validateBackup(backup, { allowedVersions: [2] });
+  const validationError = validateBackup(backup, { allowedVersions: [2, 3] });
   if (validationError || backup.format !== 'agenttodo-full') {
     throw new Error(validationError || 'Unsupported full backup format');
   }

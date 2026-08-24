@@ -6,7 +6,7 @@ AgentTODO 的前端界面，采用 React + Vite 构建。提供现代化的响�
 
 <!-- @dependencies -->
 - Node.js >= 20
-- React 18
+- React 19
 - Vite
 <!-- /dependencies -->
 
@@ -16,11 +16,12 @@ AgentTODO 的前端界面，采用 React + Vite 构建。提供现代化的响�
 
 <!-- @input -->
 ```bash
-# 1. 安装依赖
-npm install
+# 1. 在仓库根目录按 package-lock.json 安装全部 workspace 依赖
+cd ..
+npm ci
 
 # 2. 启动开发服务器
-npm run dev
+npm run dev:client
 ```
 <!-- /input -->
 
@@ -29,14 +30,18 @@ npm run dev
 会自动将 `/api` 请求代理到后端的 `http://localhost:3301`（需确保根目录执行 `npm run dev` 启动了后端服务）。
 <!-- /output -->
 
+客户端包含列表、看板和日历三种视图，支持深浅主题、筛选、批量操作、子任务、附件以及重复任务每日完成状态。任务选项的公共显示定义位于 `src/utils/taskOptions.js`，日历重复规则位于 `src/utils/calendarRecurrence.js`。
+
 ---
 
 ## 🛠️ 构建与部署
 
 <!-- @input -->
 ```bash
-# 构建生产环境静态文件
-npm run build
+# 在仓库根目录执行
+npm run build:client
+npm run lint
+npm run test:calendar --workspace=client
 ```
 <!-- /input -->
 

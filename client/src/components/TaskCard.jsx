@@ -6,9 +6,7 @@ import {
   Circle20Regular,
   CircleHalfFill20Regular,
 } from '@fluentui/react-icons';
-
-const PRIORITY_LABELS = { low: '低', medium: '中', high: '高', urgent: '紧急' };
-const STATUS_LABELS = { todo: '待办', in_progress: '进行中', done: '已完成' };
+import { PRIORITY_LABELS, RECURRENCE_LABELS, STATUS_LABELS } from '../utils/taskOptions';
 const STATUS_ICONS = {
   todo: Circle20Regular,
   in_progress: CircleHalfFill20Regular,
@@ -30,13 +28,6 @@ function formatDate(dateStr) {
   if (days <= 3) return { text: `${days}天后`, className: 'due-soon' };
   return { text: formatted, className: '' };
 }
-
-const RECURRENCE_LABELS = {
-  daily: '每天',
-  weekdays: '每个工作日',
-  weekly: '每周',
-  monthly: '每月',
-};
 
 export default function TaskCard({ task, onEdit, onStatusChange, onSelect, selected, draggable, onDragStart }) {
   const dateInfo = formatDate(task.due_date);

@@ -22,8 +22,9 @@
 <!-- @input -->
 ```bash
 cd /opt
-git clone https://github.com/alanhsun/AgentTODO.git task-manager
-cd task-manager
+git clone https://github.com/alanhsun/AgentTODO.git agenttodo
+cd agenttodo
+cp .env.example .env
 ```
 <!-- /input -->
 
@@ -31,7 +32,7 @@ cd task-manager
 
 <!-- @input -->
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 <!-- /input -->
 
@@ -51,9 +52,9 @@ docker-compose up -d
 | 环境变量名称 | 默认值 | 功能说明 |
 |---|---|---|
 | `HOST` | 本机运行 `127.0.0.1`；Compose `0.0.0.0` | 服务监听地址 |
-| `PORT` | `3300` | 后端服务监听端口 |
-| `DB_PATH` | `/data/tasks.db` | SQLite 数据库文件路径 |
-| `ATTACHMENT_DIR` | `/data/attachments` | 任务附件文件目录 |
+| `PORT` | 本机 `3301`；Compose `3300` | 后端服务监听端口 |
+| `DB_PATH` | 本机 `server/data/tasks.db`；Compose `/data/tasks.db` | SQLite 数据库文件路径 |
+| `ATTACHMENT_DIR` | 本机 `server/data/attachments`；Compose `/data/attachments` | 任务附件文件目录 |
 | `ATTACHMENT_MAX_SIZE_MB` | `20` | 单个附件大小上限（MB） |
 | `BACKUP_MAX_SIZE_MB` | `1024` | ZIP 完整备份导入上限（MB） |
 | `NODE_ENV` | `production` | 运行环境 |
@@ -61,9 +62,18 @@ docker-compose up -d
 | `API_TOKEN` | 空 | 可选访问令牌；留空仅适用于可信网络 |
 | `API_USERNAME` | `agenttodo` | 浏览器 Basic Auth 用户名 |
 | `CORS_ORIGIN` | 空 | 允许的跨站来源，多个值以逗号分隔 |
+| `JSON_BODY_LIMIT` | `50mb` | JSON 请求体上限；附件上传不使用此限制 |
 | `WEBHOOK_ALLOW_PRIVATE_NETWORK` | 本机自动允许；Compose 为 `true` | 是否允许回环/局域网 Webhook |
 | `WEBHOOK_ALLOWED_HOSTS` | 空 | 可选 Webhook 主机白名单 |
 <!-- /input -->
+
+MCP 和 CLI 作为独立本地进程运行时还会读取：
+
+| 环境变量名称 | 默认值 | 功能说明 |
+|---|---|---|
+| `AGENTTODO_URL` | `http://localhost:3301/api` | MCP/CLI 访问的完整 API 基础地址；Docker 后端通常改为 `http://127.0.0.1:3300/api` |
+| `AGENTTODO_API_TOKEN` | 空 | 与服务端 `API_TOKEN` 相同的 Bearer Token |
+| `AGENTTODO_TIMEOUT_MS` | `10000` | MCP/CLI HTTP 请求超时（毫秒） |
 
 ---
 
@@ -122,12 +132,20 @@ docker restart agenttodo
 
 <!-- @input -->
 ```bash
-cd task-manager
+cd agenttodo
 git pull
-docker-compose pull
-docker-compose up -d
+docker compose pull
+docker compose up -d
 ```
 <!-- /input -->
+
+如果希望使用当前检出的源码自行构建，而不是拉取 `alansundy/agenttodo:latest`：
+
+```bash
+docker compose up -d --build
+```
+
+数据库迁移会在服务启动时自动执行。升级前仍建议从网页导出完整 ZIP，或停止容器后备份整个 `/data`。
 
 ---
 
@@ -140,18 +158,35 @@ docker-compose up -d
 
 ### Q: 如何在 Raspberry Pi 上部署？
 <!-- @output -->
-本项目 Docker 镜像基于 Alpine + Node.js，原生支持 `arm64` 架构。在树莓派上直接执行 `docker-compose up -d` 即可正常运行。
+Dockerfile 基于 Node.js Alpine，并会在目标机器上编译 SQLite 原生依赖。若发布镜像不包含你的树莓派架构，请使用 `docker compose up -d --build` 在设备上本地构建。
 <!-- /output -->
 
 ### Q: 数据库文件在宿主机的物理路径是什么？
 <!-- @output -->
 在使用 Docker 部署时，数据存储在 Docker volume 中。可通过以下命令查看实际挂载的物理路径：
 ```bash
-docker volume inspect task-manager_task-data
+docker volume ls
+docker volume inspect agenttodo_task-data
 ```
+
+卷名前缀来自 Compose 项目名；如果目录名不同，请以 `docker volume ls` 的实际结果为准。
 <!-- /output -->
+
+### Q: MCP 显示启动成功后为什么一直没有输出？
+<!-- @output -->
+这是正常现象。MCP 使用 stdio 等待 AI 客户端发起协议请求，不是交互式命令行。人工调试请使用 `node server/src/cli/index.js`；MCP 配置参见 [MCP 指南](./docs/mcp-guide.md)。
+<!-- /output -->
+
+### Q: 如何查看容器状态和日志？
+
+```bash
+docker compose ps
+docker compose logs --tail=200 agenttodo
+curl http://localhost:3300/api/health
+```
 
 <!-- @references -->
 - 有关 AI 集成：请参阅 [CLI 技能系统开发指南](./docs/cli-skill-guide.md)
+- 有关 MCP：请参阅 [本地 MCP 接入指南](./docs/mcp-guide.md)
 - 有关 API 详情：请参阅 [API 参考文档](./docs/api-reference.md)
 <!-- /references -->

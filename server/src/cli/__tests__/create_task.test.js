@@ -33,11 +33,13 @@ describe('CreateTaskSkill 测试 (创建任务技能)', () => {
     // 执行技能
     const result = await skill.execute(args);
 
-    // 检查一：确保假 axios 被叫去跑腿了，而且去了正确的地址
+    // 请求应发送到开发模式后端地址。
     expect(axios.post).toHaveBeenCalledWith('http://localhost:3301/api/tasks', {
       title: '买咖啡',
       priority: 'high',
       recurrence: 'none' // 技能自带的默认值
+    }, {
+      timeout: 10000,
     });
 
     // 检查二：执行结果是不是我们想要的

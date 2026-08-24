@@ -4,9 +4,36 @@ const { validateTaskInput, validateBatchInput } = require('../validators/task');
 const { triggerWebhook } = require('../services/webhookService');
 const config = require('../config');
 const { dateInTimeZone } = require('../utils/date');
-const { removeAttachmentFiles } = require('../utils/attachmentStorage');
+const { removeAttachmentFiles, serializeAttachment } = require('../utils/attachmentStorage');
+const { parseDateOnly, taskOccursOnDate, taskIsOverdueOnDate } = require('../utils/recurrence');
 
 const router = express.Router();
+const PRIORITY_WEIGHT = { urgent: 4, high: 3, medium: 2, low: 1 };
+
+async function getTaskContext(db, taskId) {
+  const task = await db('tasks').where({ id: taskId }).first();
+  if (!task) return null;
+
+  const [tags, subtasks, notes, attachments, recentOccurrences] = await Promise.all([
+    db('task_tags')
+      .join('tags', 'task_tags.tag_id', 'tags.id')
+      .where('task_tags.task_id', task.id)
+      .select('tags.id', 'tags.name', 'tags.color'),
+    db('subtasks').where({ task_id: task.id }).orderBy('sort_order', 'asc'),
+    db('task_notes').where({ task_id: task.id }).orderBy('created_at', 'desc').limit(50),
+    db('task_attachments').where({ task_id: task.id }).orderBy('created_at', 'desc'),
+    db('task_occurrences').where({ task_id: task.id }).orderBy('occurrence_date', 'desc').limit(31),
+  ]);
+
+  return {
+    ...task,
+    tags,
+    subtasks,
+    notes,
+    attachments: attachments.map(serializeAttachment),
+    recent_occurrences: recentOccurrences,
+  };
+}
 
 // GET /api/tasks/summary - AI-friendly task overview
 router.get('/summary', async (req, res) => {
@@ -14,30 +41,32 @@ router.get('/summary', async (req, res) => {
     const db = getDb();
     const today = dateInTimeZone(new Date(), config.appTimezone);
 
-    const [total] = await db('tasks').count('* as count');
-    const [todo] = await db('tasks').where({ status: 'todo' }).count('* as count');
-    const [inProgress] = await db('tasks').where({ status: 'in_progress' }).count('* as count');
-    const [done] = await db('tasks').where({ status: 'done' }).count('* as count');
-    const [overdue] = await db('tasks')
-      .where('status', '!=', 'done')
-      .whereNotNull('due_date')
-      .where('due_date', '<', today)
-      .count('* as count');
-    const [dueToday] = await db('tasks')
-      .where('status', '!=', 'done')
-      .where('due_date', today)
-      .count('* as count');
-    const [urgent] = await db('tasks').where({ priority: 'urgent' })
-      .where('status', '!=', 'done').count('* as count');
-    const [high] = await db('tasks').where({ priority: 'high' })
-      .where('status', '!=', 'done').count('* as count');
-
+    const tasks = await db('tasks');
+    const activeTasks = tasks.filter((task) => task.status !== 'done');
+    const counts = tasks.reduce((result, task) => {
+      result.byStatus[task.status] += 1;
+      if (task.status !== 'done' && (task.priority === 'urgent' || task.priority === 'high')) {
+        result.byPriority[task.priority] += 1;
+      }
+      return result;
+    }, {
+      byStatus: { todo: 0, in_progress: 0, done: 0 },
+      byPriority: { urgent: 0, high: 0 },
+    });
+    const dueTodayTasks = activeTasks.filter((task) => taskOccursOnDate(task, today, config.appTimezone));
+    const dueTodayIds = dueTodayTasks.map((task) => task.id);
+    const completedTodayRows = dueTodayIds.length > 0
+      ? await db('task_occurrences').whereIn('task_id', dueTodayIds).where({ occurrence_date: today })
+      : [];
+    const completedTodayIds = new Set(completedTodayRows.map((row) => Number(row.task_id)));
+    const overdueCount = activeTasks.filter((task) => taskIsOverdueOnDate(task, today)).length;
     res.json({
-      total: total.count,
-      by_status: { todo: todo.count, in_progress: inProgress.count, done: done.count },
-      overdue: overdue.count,
-      due_today: dueToday.count,
-      by_priority: { urgent: urgent.count, high: high.count },
+      total: tasks.length,
+      by_status: counts.byStatus,
+      overdue: overdueCount,
+      due_today: dueTodayTasks.filter((task) => !completedTodayIds.has(Number(task.id))).length,
+      completed_today: completedTodayIds.size,
+      by_priority: counts.byPriority,
       date: today,
     });
   } catch (err) {
@@ -52,15 +81,14 @@ router.get('/today', async (req, res) => {
     const db = getDb();
     const today = dateInTimeZone(new Date(), config.appTimezone);
 
-    const tasks = await db('tasks')
-      .where('status', '!=', 'done')
-      .where(function () {
-        this.where('due_date', today)
-          .orWhere('due_date', '<', today);
-      })
-      .whereNotNull('due_date')
-      .orderByRaw("CASE priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC")
-      .orderBy('due_date', 'asc');
+    const activeTasks = await db('tasks').where('status', '!=', 'done');
+    const tasks = activeTasks
+      .filter((task) => taskOccursOnDate(task, today, config.appTimezone) || taskIsOverdueOnDate(task, today))
+      .sort((left, right) => {
+        const priorityDifference = PRIORITY_WEIGHT[right.priority] - PRIORITY_WEIGHT[left.priority];
+        if (priorityDifference !== 0) return priorityDifference;
+        return String(left.due_date || '').localeCompare(String(right.due_date || ''));
+      });
 
     const taskIds = tasks.map(t => t.id);
     const subtaskStats = taskIds.length > 0
@@ -73,10 +101,21 @@ router.get('/today', async (req, res) => {
     const statsMap = {};
     subtaskStats.forEach(s => { statsMap[s.task_id] = { total: s.total, completed: s.completed || 0 }; });
 
-    const result = tasks.map(t => ({
-      ...t,
-      subtask_progress: statsMap[t.id] || null,
-    }));
+    const completedRows = taskIds.length > 0
+      ? await db('task_occurrences').whereIn('task_id', taskIds).where({ occurrence_date: today })
+      : [];
+    const completedIds = new Set(completedRows.map((row) => Number(row.task_id)));
+
+    const result = tasks.map((task) => {
+      const occursToday = taskOccursOnDate(task, today, config.appTimezone);
+      return {
+        ...task,
+        subtask_progress: statsMap[task.id] || null,
+        agenda_type: occursToday ? 'today' : 'overdue',
+        occurrence_date: occursToday ? today : null,
+        occurrence_completed: completedIds.has(Number(task.id)),
+      };
+    });
 
     res.json({ date: today, tasks: result });
   } catch (err) {
@@ -91,11 +130,10 @@ router.get('/overdue', async (req, res) => {
     const db = getDb();
     const today = dateInTimeZone(new Date(), config.appTimezone);
 
-    const tasks = await db('tasks')
-      .where('status', '!=', 'done')
-      .whereNotNull('due_date')
-      .where('due_date', '<', today)
-      .orderBy('due_date', 'asc');
+    const activeTasks = await db('tasks').where('status', '!=', 'done');
+    const tasks = activeTasks
+      .filter((task) => taskIsOverdueOnDate(task, today))
+      .sort((left, right) => String(left.due_date || '').localeCompare(String(right.due_date || '')));
 
     res.json({ date: today, tasks });
   } catch (err) {
@@ -308,6 +346,152 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error('POST /tasks error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/tasks/:id/context - Compact task context for AI tools
+router.get('/:id/context', async (req, res) => {
+  try {
+    const context = await getTaskContext(getDb(), req.params.id);
+    if (!context) return res.status(404).json({ error: 'Task not found' });
+    return res.json(context);
+  } catch (err) {
+    console.error('GET /tasks/:id/context error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/tasks/:id/progress - Atomically record AI/user progress
+router.post('/:id/progress', async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    const {
+      note_content: noteContent,
+      complete_subtasks: completeSubtasks,
+      task_status: taskStatus,
+      occurrence_date: occurrenceDate,
+      occurrence_completed: occurrenceCompleted,
+      source = 'ai',
+      request_id: requestId,
+    } = body;
+    const errors = [];
+
+    if (noteContent !== undefined
+      && (typeof noteContent !== 'string' || !noteContent.trim() || noteContent.length > 10000)) {
+      errors.push('note_content must be a non-empty string of 10000 characters or less');
+    }
+    if (completeSubtasks !== undefined && (
+      !Array.isArray(completeSubtasks)
+      || completeSubtasks.some((id) => !Number.isInteger(id) || id <= 0)
+      || new Set(completeSubtasks).size !== completeSubtasks.length
+    )) errors.push('complete_subtasks must contain unique positive integer IDs');
+    if (taskStatus !== undefined && !['todo', 'in_progress', 'done'].includes(taskStatus)) {
+      errors.push('task_status must be one of: todo, in_progress, done');
+    }
+    if ((occurrenceDate === undefined) !== (occurrenceCompleted === undefined)) {
+      errors.push('occurrence_date and occurrence_completed must be provided together');
+    } else if (occurrenceDate !== undefined && (!parseDateOnly(occurrenceDate) || typeof occurrenceCompleted !== 'boolean')) {
+      errors.push('occurrence_date must be YYYY-MM-DD and occurrence_completed must be boolean');
+    }
+    if (!['user', 'ai'].includes(source)) errors.push('source must be user or ai');
+    if (requestId !== undefined && (
+      typeof requestId !== 'string' || !requestId.trim() || requestId.length > 100
+    )) errors.push('request_id must be a non-empty string of 100 characters or less');
+    if (
+      noteContent === undefined
+      && completeSubtasks === undefined
+      && taskStatus === undefined
+      && occurrenceDate === undefined
+    ) errors.push('At least one progress change is required');
+    if (errors.length > 0) return res.status(400).json({ errors });
+
+    const db = getDb();
+    const taskId = Number(req.params.id);
+    const now = new Date().toISOString();
+    const normalizedRequestId = requestId?.trim();
+    const outcome = await db.transaction(async (trx) => {
+      const task = await trx('tasks').where({ id: taskId }).first();
+      if (!task) return { notFound: true };
+
+      if (normalizedRequestId) {
+        const existingRequest = await trx('agent_requests').where({ request_id: normalizedRequestId }).first();
+        if (existingRequest) {
+          return Number(existingRequest.task_id) === taskId
+            ? { duplicate: true }
+            : { requestConflict: true };
+        }
+      }
+
+      if (completeSubtasks?.length > 0) {
+        const matchingSubtasks = await trx('subtasks')
+          .where({ task_id: taskId })
+          .whereIn('id', completeSubtasks)
+          .select('id');
+        if (matchingSubtasks.length !== completeSubtasks.length) return { invalidSubtasks: true };
+      }
+
+      if (occurrenceDate && !taskOccursOnDate(task, occurrenceDate, config.appTimezone)) {
+        return { invalidOccurrence: true };
+      }
+
+      if (noteContent !== undefined) {
+        await trx('task_notes').insert({
+          task_id: taskId,
+          content: noteContent.trim(),
+          source,
+          created_at: now,
+        });
+      }
+      if (completeSubtasks?.length > 0) {
+        await trx('subtasks')
+          .where({ task_id: taskId })
+          .whereIn('id', completeSubtasks)
+          .update({ completed: 1 });
+      }
+      if (taskStatus !== undefined) {
+        await trx('tasks').where({ id: taskId }).update({ status: taskStatus, updated_at: now });
+      } else {
+        await trx('tasks').where({ id: taskId }).update({ updated_at: now });
+      }
+      if (occurrenceDate !== undefined) {
+        if (occurrenceCompleted) {
+          await trx('task_occurrences').insert({
+            task_id: taskId,
+            occurrence_date: occurrenceDate,
+            completed_at: now,
+            source,
+          }).onConflict(['task_id', 'occurrence_date']).merge({ completed_at: now, source });
+        } else {
+          await trx('task_occurrences').where({ task_id: taskId, occurrence_date: occurrenceDate }).del();
+        }
+      }
+      if (normalizedRequestId) {
+        await trx('agent_requests').insert({
+          request_id: normalizedRequestId,
+          task_id: taskId,
+          action: 'task.progress',
+          created_at: now,
+        });
+      }
+      return { duplicate: false };
+    });
+
+    if (outcome.notFound) return res.status(404).json({ error: 'Task not found' });
+    if (outcome.requestConflict) return res.status(409).json({ error: 'request_id was already used for another task' });
+    if (outcome.invalidSubtasks) return res.status(400).json({ error: 'One or more subtask IDs do not belong to this task' });
+    if (outcome.invalidOccurrence) return res.status(400).json({ error: 'The task does not occur on occurrence_date' });
+
+    const context = await getTaskContext(db, taskId);
+    if (!outcome.duplicate) triggerWebhook('task.updated', context);
+
+    const retentionCutoff = new Date(Date.now() - (30 * 86400000)).toISOString();
+    db('agent_requests').where('created_at', '<', retentionCutoff).del()
+      .catch((error) => console.warn('Agent request cleanup failed:', error.message));
+
+    return res.json({ ok: true, duplicate: outcome.duplicate, task: context });
+  } catch (err) {
+    console.error('POST /tasks/:id/progress error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

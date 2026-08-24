@@ -1,20 +1,6 @@
 import { Button, Input, Select } from '@fluentui/react-components';
 import { ArrowSortDown20Regular, ArrowSortUp20Regular, Search20Regular } from '@fluentui/react-icons';
-
-const STATUS_OPTIONS = [
-  { value: '', label: '全部状态' },
-  { value: 'todo', label: '待办' },
-  { value: 'in_progress', label: '进行中' },
-  { value: 'done', label: '已完成' },
-];
-
-const PRIORITY_OPTIONS = [
-  { value: '', label: '全部优先级' },
-  { value: 'low', label: '低' },
-  { value: 'medium', label: '中' },
-  { value: 'high', label: '高' },
-  { value: 'urgent', label: '紧急' },
-];
+import { PRIORITY_OPTIONS, STATUS_OPTIONS } from '../utils/taskOptions';
 
 const SORT_OPTIONS = [
   { value: 'created_at', label: '创建时间' },
@@ -50,6 +36,7 @@ export default function FilterBar({ filters, onFilterChange, tags }) {
           value={filters.status || ''}
           onChange={(e) => handleChange('status', e.target.value)}
         >
+          <option value="">全部状态</option>
           {STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
@@ -61,6 +48,7 @@ export default function FilterBar({ filters, onFilterChange, tags }) {
           value={filters.priority || ''}
           onChange={(e) => handleChange('priority', e.target.value)}
         >
+          <option value="">全部优先级</option>
           {PRIORITY_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}

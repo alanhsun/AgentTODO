@@ -100,4 +100,4 @@ function createWebhookLookup({ allowPrivateNetwork }) {
   };
 }
 
-module.exports = { validateWebhookUrl, createWebhookLookup, isPrivateIp, hostIsAllowed };
+module.exports = { validateWebhookUrl, createWebhookLookup, isPrivateIp };

@@ -35,7 +35,6 @@ async function requireTask(req, res, next) {
   try {
     const task = await getDb()('tasks').where({ id: req.params.taskId }).first();
     if (!task) return res.status(404).json({ error: 'Task not found' });
-    req.task = task;
     return next();
   } catch (error) {
     return next(error);

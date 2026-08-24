@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { CheckmarkCircle20Filled, Circle20Regular, CircleHalfFill20Regular } from '@fluentui/react-icons';
 import TaskCard from './TaskCard';
+import { STATUS_LABELS } from '../utils/taskOptions';
 
 const COLUMNS = [
-  { key: 'todo', label: '待办', Icon: Circle20Regular, color: 'var(--text-secondary)' },
-  { key: 'in_progress', label: '进行中', Icon: CircleHalfFill20Regular, color: 'var(--accent)' },
-  { key: 'done', label: '已完成', Icon: CheckmarkCircle20Filled, color: 'var(--success)' },
+  { key: 'todo', label: STATUS_LABELS.todo, Icon: Circle20Regular, color: 'var(--text-secondary)' },
+  { key: 'in_progress', label: STATUS_LABELS.in_progress, Icon: CircleHalfFill20Regular, color: 'var(--accent)' },
+  { key: 'done', label: STATUS_LABELS.done, Icon: CheckmarkCircle20Filled, color: 'var(--success)' },
 ];
 
 export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, selectedIds }) {
@@ -29,7 +30,7 @@ export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, s
     }
   };
 
-  const handleDragLeave = (e, colKey) => {
+  const handleDragLeave = (colKey) => {
     if (dragOverCol === colKey) {
       setDragOverCol(null);
     }
@@ -62,7 +63,7 @@ export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, s
           <div 
             className={`kanban-column-body ${dragOverCol === col.key ? 'drag-over' : ''}`}
             onDragOver={(e) => handleDragOver(e, col.key)}
-            onDragLeave={(e) => handleDragLeave(e, col.key)}
+            onDragLeave={() => handleDragLeave(col.key)}
             onDrop={(e) => handleDrop(e, col.key)}
           >
             {grouped[col.key].length === 0 && (

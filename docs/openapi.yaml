@@ -3,7 +3,7 @@ info:
   title: AgentTODO API
   description: >
     <!-- @purpose -->AI 驱动的本地优先任务系统 RESTful API，支持可信网络免认证或可选 API Token，无缝对接 AI 助手和命令行技能系统。<!-- /purpose -->
-  version: 1.0.0
+  version: 1.1.0
   contact:
     name: AgentTODO
   license:
@@ -11,12 +11,15 @@ info:
     url: https://github.com/alanhsun/AgentTODO/blob/main/LICENSE
 servers:
   - url: http://localhost:3300
-    description: 本地开发
+    description: Docker/生产服务，或本地 Vite API 代理
+  - url: http://127.0.0.1:3301
+    description: 本地开发后端
 
 # API_TOKEN 未设置时允许匿名访问；设置后使用以下任一认证方式。
 security:
   - bearerToken: []
   - basicAuth: []
+  - apiTokenHeader: []
   - {}
 
 components:
@@ -27,6 +30,10 @@ components:
     basicAuth:
       type: http
       scheme: basic
+    apiTokenHeader:
+      type: apiKey
+      in: header
+      name: X-API-Token
 
   schemas:
     Tag:
@@ -60,13 +67,17 @@ components:
           type: string
           format: date
           nullable: true
+          description: 普通任务日期；重复任务的包含式结束日期。为空时重复任务持续发生。
         recurrence:
           type: string
           enum: [none, daily, weekdays, weekly, monthly]
+          description: 重复从 created_at 所在日期开始；weekdays 表示周一至周五。
         recurrence_end:
           type: string
           format: date
           nullable: true
+          deprecated: true
+          description: 旧版兼容字段；新客户端使用 due_date 作为重复结束日期。
         created_at:
           type: string
           format: date-time
@@ -86,6 +97,15 @@ components:
         attachment_count:
           type: integer
           minimum: 0
+        agenda_type:
+          type: string
+          enum: [today, overdue]
+        occurrence_date:
+          type: string
+          format: date
+          nullable: true
+        occurrence_completed:
+          type: boolean
 
     Subtask:
       type: object
@@ -118,6 +138,54 @@ components:
         content: { type: string }
         source: { type: string, enum: [user, ai] }
         created_at: { type: string, format: date-time }
+
+    TaskOccurrence:
+      type: object
+      properties:
+        task_id: { type: integer }
+        occurrence_date: { type: string, format: date }
+        completed_at: { type: string, format: date-time }
+        source: { type: string, enum: [user, ai] }
+
+    TaskContext:
+      allOf:
+        - $ref: '#/components/schemas/Task'
+        - type: object
+          properties:
+            subtasks:
+              type: array
+              items: { $ref: '#/components/schemas/Subtask' }
+            notes:
+              type: array
+              items: { $ref: '#/components/schemas/TaskNote' }
+            attachments:
+              type: array
+              items: { $ref: '#/components/schemas/Attachment' }
+            recent_occurrences:
+              type: array
+              items: { $ref: '#/components/schemas/TaskOccurrence' }
+
+    TaskProgressInput:
+      type: object
+      anyOf:
+        - required: [note_content]
+        - required: [complete_subtasks]
+        - required: [task_status]
+        - required: [occurrence_date, occurrence_completed]
+      properties:
+        note_content: { type: string, maxLength: 10000 }
+        complete_subtasks:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        task_status: { type: string, enum: [todo, in_progress, done] }
+        occurrence_date: { type: string, format: date }
+        occurrence_completed: { type: boolean }
+        source: { type: string, enum: [user, ai], default: ai }
+        request_id:
+          type: string
+          maxLength: 100
+          description: 幂等调用 ID；同一次网络重试必须复用。
 
     Webhook:
       type: object
@@ -152,14 +220,18 @@ components:
           type: string
           format: date
           nullable: true
+          description: 重复任务的包含式结束日期；为空时持续发生。
         recurrence:
           type: string
           enum: [none, daily, weekdays, weekly, monthly]
           default: none
+          description: 从任务创建日期开始计算。
         recurrence_end:
           type: string
           format: date
           nullable: true
+          deprecated: true
+          description: 旧版兼容字段；新客户端使用 due_date。
         tags:
           type: array
           items:
@@ -200,6 +272,8 @@ components:
           type: string
           format: date
           nullable: true
+          deprecated: true
+          description: 旧版兼容字段；新客户端使用 due_date。
         tags:
           type: array
           items:
@@ -278,6 +352,7 @@ paths:
                     additionalProperties: { type: integer }
                   overdue: { type: integer }
                   due_today: { type: integer }
+                  completed_today: { type: integer }
                   by_priority:
                     type: object
                     additionalProperties: { type: integer }
@@ -502,6 +577,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /api/tasks/{id}/context:
+    get:
+      summary: 获取 AI 紧凑任务上下文
+      tags: [Tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: 任务、子任务、笔记、附件元数据和近期重复完成记录
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskContext' }
+        '404':
+          description: 任务不存在
+
+  /api/tasks/{id}/progress:
+    post:
+      summary: 原子记录任务进展
+      description: 笔记、子任务、主状态和某次重复任务完成状态在同一事务内更新；request_id 用于安全重试。
+      tags: [Tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskProgressInput' }
+      responses:
+        '200':
+          description: 更新成功或幂等重放成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  duplicate: { type: boolean }
+                  task: { $ref: '#/components/schemas/TaskContext' }
+        '400':
+          description: 参数、子任务或重复日期无效
+        '404':
+          description: 任务不存在
 
   /api/tasks/batch:
     post:

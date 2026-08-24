@@ -3,6 +3,7 @@ const { getDb } = require('./db');
 const { triggerWebhook } = require('./services/webhookService');
 const config = require('./config');
 const { dateInTimeZone } = require('./utils/date');
+const { taskIsOverdueOnDate } = require('./utils/recurrence');
 
 function initWorkers() {
   console.log('Webhook worker initialized: listening for overdue tasks');
@@ -14,10 +15,8 @@ function initWorkers() {
       const db = getDb();
       const today = dateInTimeZone(new Date(), config.appTimezone);
 
-      const overdueTasks = await db('tasks')
-        .where('status', '!=', 'done')
-        .whereNotNull('due_date')
-        .where('due_date', '<', today);
+      const activeTasks = await db('tasks').where('status', '!=', 'done');
+      const overdueTasks = activeTasks.filter((task) => taskIsOverdueOnDate(task, today));
 
       if (overdueTasks.length > 0) {
         console.log(`[CronWorker] Found ${overdueTasks.length} overdue tasks.`);
@@ -31,8 +30,6 @@ function initWorkers() {
       console.error('[CronWorker] Error:', e.message);
     }
   }, { timezone: config.appTimezone });
-
-  // 每5分钟检查是否有将于 1 小时内到期的任务 (假设增加 due_time 字段或高频扫描，这里仅示范全盘扫描不频繁)
 }
 
 module.exports = { initWorkers };

@@ -59,7 +59,7 @@ if (swaggerDocument) {
   });
 }
 
-// API routes (no auth required)
+// API routes (protected when API_TOKEN is configured)
 app.use('/api/tasks', taskRoutes);
 app.use('/api/tasks', subtasksNotesRoutes);
 app.use('/api/tasks', attachmentRoutes);

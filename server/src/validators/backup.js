@@ -1,5 +1,6 @@
 const BACKUP_TABLES = ['tasks', 'tags', 'task_tags', 'subtasks', 'task_notes', 'webhooks'];
 const FULL_BACKUP_TABLES = [...BACKUP_TABLES, 'task_attachments'];
+const CURRENT_BACKUP_TABLES = [...FULL_BACKUP_TABLES, 'task_occurrences'];
 const MAX_BACKUP_RECORDS = 100000;
 
 function validateBackup(backup, { allowedVersions = [1] } = {}) {
@@ -11,10 +12,12 @@ function validateBackup(backup, { allowedVersions = [1] } = {}) {
   }
 
   let totalRecords = 0;
-  const tables = backup.version === 2 ? FULL_BACKUP_TABLES : BACKUP_TABLES;
+  const tables = backup.version >= 3
+    ? CURRENT_BACKUP_TABLES
+    : (backup.version === 2 ? FULL_BACKUP_TABLES : BACKUP_TABLES);
   for (const table of tables) {
     const rows = backup.data[table];
-    if (backup.version === 2 && rows === undefined) {
+    if (backup.version >= 2 && rows === undefined) {
       return `Backup field ${table} is required`;
     }
     if (rows !== undefined && !Array.isArray(rows)) {
@@ -29,4 +32,6 @@ function validateBackup(backup, { allowedVersions = [1] } = {}) {
   return null;
 }
 
-module.exports = { validateBackup, BACKUP_TABLES, FULL_BACKUP_TABLES, MAX_BACKUP_RECORDS };
+module.exports = {
+  validateBackup,
+};

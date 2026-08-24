@@ -28,9 +28,4 @@ async function closeDb() {
   }
 }
 
-// Allow overriding for tests
-function setDb(instance) {
-  db = instance;
-}
-
-module.exports = { getDb, initDb, closeDb, setDb };
+module.exports = { getDb, initDb, closeDb };

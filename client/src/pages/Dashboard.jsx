@@ -54,7 +54,8 @@ function TaskListSkeleton() {
 
 export default function Dashboard() {
   const [filters, setFilters] = useState({ sort: 'created_at', order: 'desc', page: 1, limit: 20 });
-  const { tasks, pagination, loading, refetch } = useTasks(filters);
+  const [viewMode, setViewMode] = useState('list');
+  const { tasks, pagination, loading, refetch } = useTasks(viewMode === 'list' ? filters : null);
   const { summary, refetch: refetchSummary } = useTaskSummary();
   const { tags, refetch: refetchTags } = useTags();
   const [showForm, setShowForm] = useState(false);
@@ -62,7 +63,6 @@ export default function Dashboard() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [showTags, setShowTags] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'kanban'
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const fileInputRef = useRef(null);
@@ -84,7 +84,7 @@ export default function Dashboard() {
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
-  // For kanban and calendar view, fetch more tasks with no status filter
+  // Kanban and calendar need every matching task, regardless of status.
   const kanbanFilters = useMemo(() => ({ ...filters, page: 1, status: '' }), [filters]);
   const { tasks: kanbanTasks, loading: kanbanLoading, refetch: kanbanRefetch } = useTasks(
     viewMode === 'kanban' || viewMode === 'calendar' ? kanbanFilters : null,

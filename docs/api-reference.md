@@ -6,16 +6,18 @@
 <!-- /purpose -->
 
 <!-- @dependencies -->
-- 基础 URL: `http://<服务器地址>:3300` (开发模式下，Vite 前端在 3300 端口会自动代理 API 请求至后端的 3301)
+- 基础 URL: Docker/生产环境为 `http://<服务器地址>:3300/api`；本地开发后端为 `http://127.0.0.1:3301/api`。Vite 前端的 `http://localhost:3300/api` 会代理到后端。
 - 内容类型: `application/json`
 - API 规范: OpenAPI 3.0 (可访问 `/api/openapi.json` 获取)
 - 交互式文档: 浏览器访问 `/api-docs` 查看 Swagger UI
 <!-- /dependencies -->
 
-启用 `API_TOKEN` 后，脚本调用示例：
+启用 `API_TOKEN` 后，脚本可选择以下一种请求头：
 
 ```http
 Authorization: Bearer <API_TOKEN>
+# 或
+X-API-Token: <API_TOKEN>
 ```
 
 `GET /api/health` 始终免认证，用于本地和容器健康检查。
@@ -28,6 +30,7 @@ Authorization: Bearer <API_TOKEN>
 3. [任务子元素 (Subtasks & Notes)](#3-任务子元素-subtasks--notes)
 4. [标签 (Tags)](#4-标签-tags)
 5. [系统与 Webhook](#5-系统与-webhook)
+6. [状态码与错误处理](#6-状态码与错误处理)
 
 ---
 
@@ -52,6 +55,7 @@ GET /api/tasks/summary
   "by_status": {"todo": 8, "in_progress": 4, "done": 3},
   "overdue": 2,
   "due_today": 3,
+  "completed_today": 1,
   "by_priority": {"urgent": 1, "high": 3},
   "date": "2026-03-10"
 }
@@ -66,7 +70,7 @@ GET /api/tasks/today
 <!-- /input -->
 
 <!-- @output -->
-返回当天到期及已逾期的任务，包含子任务进度：
+返回当天实际发生的任务及已逾期任务，包含子任务统计和本次重复完成状态：
 ```json
 {
   "date": "2026-03-10",
@@ -77,7 +81,10 @@ GET /api/tasks/today
       "priority": "high",
       "due_date": "2026-03-10", 
       "recurrence": "daily",
-      "subtask_progress": {"total": 3, "completed": 1}
+      "subtask_progress": {"total": 3, "completed": 1},
+      "agenda_type": "today",
+      "occurrence_date": "2026-03-10",
+      "occurrence_completed": false
     }
   ]
 }
@@ -118,6 +125,10 @@ POST /api/tasks
 }
 ```
 *提示：AI 可利用 `subtasks` 数组一次性拆分并创建带有子任务的大项目。*
+
+重复任务从 `created_at` 所在日期开始，到 `due_date` 为止（含首尾日期）；不设置 `due_date` 时会持续发生。`weekdays` 仅周一至周五，`weekly` 每 7 天，`monthly` 使用创建日的日号且跳过不存在该日号的月份。任务主体不会按天复制。
+
+旧版 `recurrence_end` 字段仍可读取和写入，但已废弃；新客户端应只使用 `due_date` 表示重复结束日期。
 <!-- /input -->
 
 ### 2.2 查询与搜索任务
@@ -131,6 +142,9 @@ GET /api/tasks?status=todo&priority=high&search=关键词&sort=due_date&order=as
 - `tag`: 标签ID
 - `search`: 模糊搜索标题和描述
 - `due_before` / `due_after`: 时间过滤
+- `sort`: `created_at | updated_at | due_date | priority | title | status`
+- `order`: `asc | desc`
+- `page` / `limit`: 分页；`limit` 最大 100
 
 每个任务会额外返回 `subtask_progress`，例如 `{"total": 4, "completed": 2}`；没有子任务时为 `null`。
 <!-- /input -->
@@ -142,7 +156,57 @@ PUT /api/tasks/:id
 DELETE /api/tasks/:id
 ```
 对于 `PUT`，只需传入需要修改的字段（局部更新）。
+
+读取单个任务使用：
+
+```http
+GET /api/tasks/:id
+```
 <!-- /input -->
+
+### 2.4 AI 紧凑上下文
+
+```http
+GET /api/tasks/:id/context
+```
+
+一次返回任务、标签、子任务、最近 50 条笔记、附件元数据和最近 31 条重复完成记录，减少 AI 连续发起多次查询。附件只返回安全的公开元数据，不返回磁盘存储文件名。
+
+### 2.5 原子记录进展
+
+```http
+POST /api/tasks/:id/progress
+```
+
+```json
+{
+  "note_content": "今天已经完成核对",
+  "complete_subtasks": [12],
+  "task_status": "in_progress",
+  "occurrence_date": "2026-03-10",
+  "occurrence_completed": true,
+  "source": "ai",
+  "request_id": "conversation-123-step-4"
+}
+```
+
+至少需要提供 `note_content`、`complete_subtasks`、`task_status` 或一组 `occurrence_date` + `occurrence_completed`。所有变化在同一个 SQLite 事务中完成；子任务 ID 必须属于该任务，发生日期也必须符合任务的重复规则。AI 重试时复用同一个 `request_id`，接口会返回 `duplicate: true`，不会重复添加笔记。
+
+### 2.6 批量操作
+
+```http
+POST /api/tasks/batch
+```
+
+```json
+{
+  "action": "update_status",
+  "ids": [1, 2, 3],
+  "value": "in_progress"
+}
+```
+
+`action` 支持 `update_status`、`update_priority` 和 `delete`，单次最多处理 100 个任务。批量删除会同时清理关联附件文件，调用前应由用户明确确认。
 
 ---
 
@@ -172,7 +236,7 @@ GET    /api/tasks/:id/attachments/:aid/preview            # 预览 JPEG/PNG/GIF/
 DELETE /api/tasks/:id/attachments/:aid                    # 删除附件及磁盘文件
 ```
 
-附件文件保存在 `ATTACHMENT_DIR`，SQLite 仅保存名称、类型、大小和 SHA-256 等元数据。默认单文件上限为 20 MB，可通过 `ATTACHMENT_MAX_SIZE_MB` 调整。
+附件文件保存在 `ATTACHMENT_DIR`，SQLite 仅保存名称、类型、大小和 SHA-256 等元数据。默认单文件上限为 20 MB，可通过 `ATTACHMENT_MAX_SIZE_MB` 调整。只有 JPEG、PNG、GIF 和 WebP 返回 `preview_url`；其他文件使用下载接口。
 <!-- /input -->
 
 ### 3.3 任务备注 (进展日志)
@@ -224,6 +288,14 @@ POST /api/webhooks
 ```
 <!-- /input -->
 
+查询现有 Webhook：
+
+```http
+GET /api/webhooks
+```
+
+`events` 只接受 `task.created`、`task.updated`、`task.overdue` 或 `*`。默认会订阅前三项。出于 SSRF 防护，私网地址和主机白名单受 `WEBHOOK_ALLOW_PRIVATE_NETWORK` 与 `WEBHOOK_ALLOWED_HOSTS` 控制。
+
 ### 5.2 健康检查
 <!-- @input -->
 ```http
@@ -253,7 +325,22 @@ POST /api/backup/import         # 兼容旧版 JSON 恢复
 ZIP 恢复会核验附件大小与 SHA-256。旧版 JSON 恢复不包含附件，因此会清除当前附件；日常使用应优先选择 ZIP。
 <!-- /input -->
 
+---
+
+## 6. 状态码与错误处理
+
+- `200/201`：请求成功。
+- `400`：字段、日期、重复规则或文件格式不合法；详细校验信息可能位于 `errors` 数组。
+- `401`：已配置 `API_TOKEN`，但认证缺失或错误。
+- `404`：任务或子资源不存在。
+- `409`：幂等 `request_id` 已被另一个任务使用。
+- `413`：JSON 请求体超过 `JSON_BODY_LIMIT`；附件或备份文件超限会返回 `400`。
+- `500`：服务端异常；客户端可记录错误并谨慎重试读取请求。
+
+健康检查是唯一始终免认证的 API。Swagger UI 和 `/api/openapi.json` 在启用 Token 后同样受到保护。
+
 <!-- @references -->
 - 想通过命令行调用？[参阅 CLI 技能指南](./cli-skill-guide.md)
+- 使用本地 AI 客户端？[参阅 MCP 指南](./mcp-guide.md)
 - 需要了解 AI 交互设定？[参阅 AI 助手工作流](../ai-integration/skill_workflow.md)
 <!-- /references -->

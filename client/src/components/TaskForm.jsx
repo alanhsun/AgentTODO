@@ -15,27 +15,7 @@ import {
   Person16Regular,
 } from '@fluentui/react-icons';
 import { tasksApi } from '../api';
-
-const PRIORITY_OPTIONS = [
-  { value: 'low', label: '低', color: 'var(--priority-low)' },
-  { value: 'medium', label: '中', color: 'var(--priority-medium)' },
-  { value: 'high', label: '高', color: 'var(--priority-high)' },
-  { value: 'urgent', label: '紧急', color: 'var(--priority-urgent)' },
-];
-
-const STATUS_OPTIONS = [
-  { value: 'todo', label: '待办' },
-  { value: 'in_progress', label: '进行中' },
-  { value: 'done', label: '已完成' },
-];
-
-const RECURRENCE_OPTIONS = [
-  { value: 'none', label: '不重复' },
-  { value: 'daily', label: '每天' },
-  { value: 'weekdays', label: '每个工作日' },
-  { value: 'weekly', label: '每周' },
-  { value: 'monthly', label: '每月' },
-];
+import { PRIORITY_OPTIONS, RECURRENCE_OPTIONS, STATUS_OPTIONS } from '../utils/taskOptions';
 
 function createInitialForm(task) {
   return {
@@ -122,9 +102,6 @@ export default function TaskForm({
     const data = {
       ...form,
       due_date: form.due_date || null,
-      // Kept in the API for backwards compatibility, but the calendar now uses
-      // created_at as the recurrence start and due_date as its inclusive end.
-      recurrence_end: null,
     };
     // Only include subtasks on create (not edit)
     if (task) delete data.subtasks;

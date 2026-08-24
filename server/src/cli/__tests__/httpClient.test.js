@@ -12,12 +12,14 @@ describe('CLI HTTP client authentication', () => {
     else process.env.AGENTTODO_API_TOKEN = originalToken;
   });
 
-  test('preserves the original request shape when no token is configured', async () => {
+  test('adds a timeout when no token is configured', async () => {
     delete process.env.AGENTTODO_API_TOKEN;
     axios.post.mockResolvedValue({ data: {} });
 
     await httpClient.post('http://localhost/api/tasks', { title: 'test' });
-    expect(axios.post).toHaveBeenCalledWith('http://localhost/api/tasks', { title: 'test' });
+    expect(axios.post).toHaveBeenCalledWith('http://localhost/api/tasks', { title: 'test' }, {
+      timeout: 10000,
+    });
   });
 
   test('adds a bearer token when configured', async () => {
@@ -27,6 +29,7 @@ describe('CLI HTTP client authentication', () => {
     await httpClient.get('http://localhost/api/tasks');
     expect(axios.get).toHaveBeenCalledWith('http://localhost/api/tasks', {
       headers: { Authorization: 'Bearer secret' },
+      timeout: 10000,
     });
   });
 });

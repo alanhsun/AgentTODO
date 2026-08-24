@@ -1,9 +1,4 @@
-const RECURRENCE_LABELS = {
-  daily: '每天',
-  weekdays: '每个工作日',
-  weekly: '每周',
-  monthly: '每月',
-};
+import { RECURRENCE_LABELS } from './taskOptions.js';
 
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})/;
 
@@ -52,7 +47,7 @@ function parseCreatedAt(value) {
 }
 
 export function getRecurrenceLabel(recurrence) {
-  return RECURRENCE_LABELS[recurrence] || '';
+  return recurrence === 'none' ? '' : (RECURRENCE_LABELS[recurrence] || '');
 }
 
 export function taskOccursOnDate(task, date) {

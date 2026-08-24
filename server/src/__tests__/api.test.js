@@ -8,6 +8,8 @@ process.env.ATTACHMENT_DIR = TEST_ATTACHMENT_DIR;
 
 const app = require('../app');
 const { initDb, getDb, closeDb } = require('../db');
+const config = require('../config');
+const { dateInTimeZone } = require('../utils/date');
 
 describe('Task API and database integrity', () => {
   beforeAll(async () => {
@@ -18,6 +20,8 @@ describe('Task API and database integrity', () => {
 
   beforeEach(async () => {
     const db = getDb();
+    await db('agent_requests').del();
+    await db('task_occurrences').del();
     await db('task_attachments').del();
     await db('task_tags').del();
     await db('subtasks').del();
@@ -135,7 +139,17 @@ describe('Task API and database integrity', () => {
   });
 
   test('exports and restores a full ZIP backup with attachment contents', async () => {
-    const created = await request(app).post('/api/tasks').send({ title: '完整备份任务' });
+    const today = dateInTimeZone(new Date(), config.appTimezone);
+    const created = await request(app).post('/api/tasks').send({
+      title: '完整备份任务',
+      due_date: today,
+      recurrence: 'daily',
+    });
+    await request(app).post(`/api/tasks/${created.body.id}/progress`).send({
+      occurrence_date: today,
+      occurrence_completed: true,
+      source: 'user',
+    });
     const upload = await request(app)
       .post(`/api/tasks/${created.body.id}/attachments`)
       .attach('file', Buffer.from('preserved in zip'), 'backup-note.txt');
@@ -167,6 +181,7 @@ describe('Task API and database integrity', () => {
     expect(restoredTasks.body.data[0]).toMatchObject({ title: '完整备份任务', attachment_count: 1 });
     const restoredAttachments = await request(app).get(`/api/tasks/${created.body.id}/attachments`);
     expect(restoredAttachments.body).toHaveLength(1);
+    expect(await getDb()('task_occurrences').where({ task_id: created.body.id, occurrence_date: today })).toHaveLength(1);
     const download = await request(app).get(restoredAttachments.body[0].download_url);
     expect(download.body.toString()).toBe('preserved in zip');
   });
@@ -206,5 +221,89 @@ describe('Task API and database integrity', () => {
 
     expect(response.status).toBe(201);
     expect(response.body.recurrence).toBe('weekdays');
+  });
+
+  test('includes an active recurring occurrence in the AI agenda before its end date', async () => {
+    const today = dateInTimeZone(new Date(), config.appTimezone);
+    const due = new Date(`${today}T00:00:00Z`);
+    due.setUTCDate(due.getUTCDate() + 2);
+    const dueDate = due.toISOString().slice(0, 10);
+    const created = await request(app).post('/api/tasks').send({
+      title: '每日复盘',
+      due_date: dueDate,
+      recurrence: 'daily',
+    });
+
+    const agenda = await request(app).get('/api/tasks/today');
+
+    expect(agenda.status).toBe(200);
+    expect(agenda.body.tasks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: created.body.id,
+        agenda_type: 'today',
+        occurrence_date: today,
+        occurrence_completed: false,
+      }),
+    ]));
+  });
+
+  test('records progress atomically and treats a repeated request id as idempotent', async () => {
+    const today = dateInTimeZone(new Date(), config.appTimezone);
+    const created = await request(app).post('/api/tasks').send({
+      title: 'AI 联动任务',
+      due_date: today,
+      recurrence: 'daily',
+      subtasks: ['核对结果'],
+    });
+    const db = getDb();
+    const subtask = await db('subtasks').where({ task_id: created.body.id }).first();
+    const payload = {
+      note_content: '今天已经完成核对。',
+      complete_subtasks: [subtask.id],
+      task_status: 'in_progress',
+      occurrence_date: today,
+      occurrence_completed: true,
+      request_id: 'progress-test-1',
+    };
+
+    const first = await request(app).post(`/api/tasks/${created.body.id}/progress`).send(payload);
+    const repeated = await request(app).post(`/api/tasks/${created.body.id}/progress`).send(payload);
+
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ ok: true, duplicate: false });
+    expect(repeated.body).toMatchObject({ ok: true, duplicate: true });
+    expect(await db('task_notes').where({ task_id: created.body.id })).toHaveLength(1);
+    expect(await db('task_occurrences').where({ task_id: created.body.id, occurrence_date: today })).toHaveLength(1);
+    expect((await db('subtasks').where({ id: subtask.id }).first()).completed).toBe(1);
+
+    const agenda = await request(app).get('/api/tasks/today');
+    expect(agenda.body.tasks.find((task) => task.id === created.body.id).occurrence_completed).toBe(true);
+    const summary = await request(app).get('/api/tasks/summary');
+    expect(summary.body.completed_today).toBe(1);
+  });
+
+  test('returns a compact AI context bundle', async () => {
+    const created = await request(app).post('/api/tasks').send({
+      title: '上下文任务',
+      subtasks: ['第一步'],
+    });
+    await request(app).post(`/api/tasks/${created.body.id}/notes`).send({ content: '已有进展', source: 'ai' });
+    await request(app)
+      .post(`/api/tasks/${created.body.id}/attachments`)
+      .attach('file', Buffer.from('context attachment'), 'context.txt');
+
+    const response = await request(app).get(`/api/tasks/${created.body.id}/context`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ title: '上下文任务' });
+    expect(response.body.subtasks).toHaveLength(1);
+    expect(response.body.notes).toHaveLength(1);
+    expect(response.body.attachments).toHaveLength(1);
+    expect(response.body.attachments[0]).toMatchObject({
+      original_name: 'context.txt',
+      preview_url: null,
+    });
+    expect(response.body.attachments[0]).not.toHaveProperty('stored_name');
+    expect(response.body.recent_occurrences).toEqual([]);
   });
 });

@@ -1,15 +1,8 @@
+const { parseDateOnly } = require('../utils/recurrence');
+
 const VALID_STATUSES = ['todo', 'in_progress', 'done'];
 const VALID_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 const VALID_RECURRENCES = ['none', 'daily', 'weekdays', 'weekly', 'monthly'];
-
-function isValidDateOnly(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  return parsed.getUTCFullYear() === year
-    && parsed.getUTCMonth() === month - 1
-    && parsed.getUTCDate() === day;
-}
 
 function validateTaskInput(data, isUpdate = false) {
   const errors = [];
@@ -42,7 +35,7 @@ function validateTaskInput(data, isUpdate = false) {
   }
 
   if (data.due_date !== undefined && data.due_date !== null) {
-    if (!isValidDateOnly(data.due_date)) {
+    if (!parseDateOnly(data.due_date)) {
       errors.push('due_date must be a valid YYYY-MM-DD date');
     }
   }
@@ -52,7 +45,7 @@ function validateTaskInput(data, isUpdate = false) {
   }
 
   if (data.recurrence_end !== undefined && data.recurrence_end !== null) {
-    if (!isValidDateOnly(data.recurrence_end)) {
+    if (!parseDateOnly(data.recurrence_end)) {
       errors.push('recurrence_end must be a valid YYYY-MM-DD date');
     }
   }
@@ -114,8 +107,4 @@ function validateBatchInput(data) {
 module.exports = {
   validateTaskInput,
   validateBatchInput,
-  isValidDateOnly,
-  VALID_STATUSES,
-  VALID_PRIORITIES,
-  VALID_RECURRENCES,
 };
