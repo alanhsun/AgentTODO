@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Button } from '@fluentui/react-components';
+import { Add16Regular, Delete16Regular, Dismiss16Regular, Edit16Regular } from '@fluentui/react-icons';
 import { tagsApi } from '../api';
 
 const PRESET_COLORS = [
@@ -59,9 +61,9 @@ export default function TagManager({ tags, onRefresh }) {
     <div className="tag-manager">
       <div className="tag-manager-header">
         <h3>标签管理</h3>
-        <button className="btn btn-sm btn-primary" onClick={() => { resetForm(); setShowForm(!showForm); }}>
-          {showForm ? '取消' : '+ 新标签'}
-        </button>
+        <Button appearance={showForm ? 'subtle' : 'primary'} size="small" icon={showForm ? <Dismiss16Regular /> : <Add16Regular />} onClick={() => { resetForm(); setShowForm(!showForm); }}>
+          {showForm ? '取消' : '新标签'}
+        </Button>
       </div>
 
       {showForm && (
@@ -86,9 +88,9 @@ export default function TagManager({ tags, onRefresh }) {
             ))}
           </div>
           {error && <div className="form-error">{error}</div>}
-          <button type="submit" className="btn btn-sm btn-primary">
+          <Button type="submit" appearance="primary" size="small">
             {editTag ? '保存' : '创建'}
-          </button>
+          </Button>
         </form>
       )}
 
@@ -99,8 +101,8 @@ export default function TagManager({ tags, onRefresh }) {
             <span className="tag-badge" style={{ '--tag-color': tag.color }}>{tag.name}</span>
             <span className="tag-count">{tag.task_count} 个任务</span>
             <div className="tag-actions">
-              <button className="btn-icon" onClick={() => startEdit(tag)} title="编辑">✎</button>
-              <button className="btn-icon danger" onClick={() => handleDelete(tag.id)} title="删除">✕</button>
+              <Button appearance="subtle" size="small" icon={<Edit16Regular />} onClick={() => startEdit(tag)} aria-label={`编辑标签${tag.name}`} title="编辑" />
+              <Button appearance="subtle" size="small" icon={<Delete16Regular />} className="danger-action" onClick={() => handleDelete(tag.id)} aria-label={`删除标签${tag.name}`} title="删除" />
             </div>
           </div>
         ))}

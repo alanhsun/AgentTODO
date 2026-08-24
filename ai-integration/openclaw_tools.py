@@ -40,7 +40,7 @@ def create_task(title: str, priority: str = 'medium', due_date: Optional[str] = 
                 recurrence: str = 'none', subtasks: Optional[List[str]] = None, tags: Optional[List[int]] = None) -> str:
     """创建一个新任务或周期性习惯。
     - priority: 必须是 'low', 'medium', 'high', 'urgent' 之一。
-    - recurrence: 必须是 'none', 'daily', 'weekly', 'monthly' 之一。
+    - recurrence: 必须是 'none', 'daily', 'weekdays', 'weekly', 'monthly' 之一。
     - subtasks: 字符串列表，如果这是一个大任务，建议将其按步骤拆分为子任务（例如 ["第一步", "第二步"]）。
     - tags: 已有标签的 ID 列表。
     """
@@ -155,7 +155,7 @@ OPENCLAW_TOOLS_SCHEMA = [
                     "title": {"type": "string", "description": "任务的标题。"},
                     "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"]},
                     "due_date": {"type": "string", "description": "截止日期，格式 YYYY-MM-DD"},
-                    "recurrence": {"type": "string", "enum": ["none", "daily", "weekly", "monthly"]},
+                    "recurrence": {"type": "string", "enum": ["none", "daily", "weekdays", "weekly", "monthly"]},
                     "subtasks": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -183,7 +183,7 @@ OPENCLAW_TOOLS_SCHEMA = [
                     "title": {"type": "string", "description": "新的标题名称"},
                     "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"]},
                     "due_date": {"type": "string", "description": "新的截止日期，格式 YYYY-MM-DD"},
-                    "recurrence": {"type": "string", "enum": ["none", "daily", "weekly", "monthly"]},
+                    "recurrence": {"type": "string", "enum": ["none", "daily", "weekdays", "weekly", "monthly"]},
                     "tags": {
                         "type": "array",
                         "items": {"type": "integer"},

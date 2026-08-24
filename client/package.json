@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:calendar": "node --test src/utils/calendarRecurrence.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fluentui/react-components": "^9.74.6",
+    "@fluentui/react-icons": "^2.0.338",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

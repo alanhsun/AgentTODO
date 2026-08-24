@@ -1,4 +1,11 @@
 import { useState } from 'react';
+import { Button } from '@fluentui/react-components';
+import {
+  ArrowRepeatAll16Regular,
+  ChevronLeft20Regular,
+  ChevronRight20Regular,
+} from '@fluentui/react-icons';
+import { getRecurrenceLabel, taskOccursOnDate } from '../utils/calendarRecurrence';
 
 const DAYS_OF_WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -36,19 +43,37 @@ export default function CalendarBoard({ tasks, onEdit }) {
 
   const getTasksForDate = (date) => {
     if (!date) return [];
-    // YYYY-MM-DD target string
-    const tzoffset = date.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(date.getTime() - tzoffset)).toISOString().split('T')[0];
-    return tasks.filter(t => t.due_date && t.due_date.startsWith(localISOTime));
+    return tasks.filter(task => taskOccursOnDate(task, date));
+  };
+
+  const renderCalendarTask = (task) => {
+    const recurrenceLabel = getRecurrenceLabel(task.recurrence);
+    const title = recurrenceLabel
+      ? `${task.title}（${recurrenceLabel}重复）`
+      : task.title;
+
+    return (
+      <div
+        key={task.id}
+        className={`calendar-task status-${task.status} priority-${task.priority} ${recurrenceLabel ? 'recurring' : ''}`}
+        onClick={() => onEdit(task)}
+        title={title}
+      >
+        {recurrenceLabel && (
+          <span className="calendar-recurrence-indicator" aria-label={`${recurrenceLabel}重复`}><ArrowRepeatAll16Regular /></span>
+        )}
+        <span className="task-title-trunc">{task.title}</span>
+      </div>
+    );
   };
 
   return (
     <div className="calendar-board">
       <div className="calendar-header">
         <div className="calendar-nav">
-          <button className="btn btn-sm btn-ghost" onClick={prevMonth}>&lt;</button>
-          <button className="btn btn-sm btn-ghost" onClick={today}>今天</button>
-          <button className="btn btn-sm btn-ghost" onClick={nextMonth}>&gt;</button>
+          <Button appearance="subtle" size="small" icon={<ChevronLeft20Regular />} onClick={prevMonth} aria-label="上个月" />
+          <Button appearance="subtle" size="small" onClick={today}>今天</Button>
+          <Button appearance="subtle" size="small" icon={<ChevronRight20Regular />} onClick={nextMonth} aria-label="下个月" />
         </div>
         <h2 className="calendar-title">{year}年 {month + 1}月</h2>
       </div>
@@ -65,16 +90,7 @@ export default function CalendarBoard({ tasks, onEdit }) {
                 <>
                   <div className="calendar-date-number">{date.getDate()}</div>
                   <div className="calendar-day-tasks">
-                    {dayTasks.map(task => (
-                      <div 
-                        key={task.id} 
-                        className={`calendar-task status-${task.status} priority-${task.priority}`}
-                        onClick={() => onEdit(task)}
-                        title={task.title}
-                      >
-                        <span className="task-title-trunc">{task.title}</span>
-                      </div>
-                    ))}
+                    {dayTasks.map(renderCalendarTask)}
                   </div>
                 </>
               )}

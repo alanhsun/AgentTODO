@@ -1,4 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
+import { Button } from '@fluentui/react-components';
+import {
+  Add16Regular,
+  Attach20Regular,
+  Bot16Regular,
+  Circle16Regular,
+  Delete16Regular,
+  Dismiss20Regular,
+  Document20Regular,
+  DocumentPdf20Regular,
+  Edit16Regular,
+  FolderZip20Regular,
+  Image20Regular,
+  Person16Regular,
+} from '@fluentui/react-icons';
 import { tasksApi } from '../api';
 
 const PRIORITY_OPTIONS = [
@@ -17,6 +32,7 @@ const STATUS_OPTIONS = [
 const RECURRENCE_OPTIONS = [
   { value: 'none', label: '不重复' },
   { value: 'daily', label: '每天' },
+  { value: 'weekdays', label: '每个工作日' },
   { value: 'weekly', label: '每周' },
   { value: 'monthly', label: '每月' },
 ];
@@ -29,7 +45,6 @@ function createInitialForm(task) {
     priority: task?.priority || 'medium',
     due_date: task?.due_date ? task.due_date.split('T')[0] : '',
     recurrence: task?.recurrence || 'none',
-    recurrence_end: task?.recurrence_end ? task.recurrence_end.split('T')[0] : '',
     tags: task?.tags?.map((tag) => tag.id) || [],
     subtasks: [],
   };
@@ -41,11 +56,11 @@ function formatFileSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function attachmentIcon(mimeType) {
-  if (mimeType?.startsWith('image/')) return '🖼️';
-  if (mimeType === 'application/pdf') return '📕';
-  if (mimeType?.includes('zip') || mimeType?.includes('compressed')) return '🗜️';
-  return '📄';
+function AttachmentFileIcon({ mimeType }) {
+  if (mimeType?.startsWith('image/')) return <Image20Regular />;
+  if (mimeType === 'application/pdf') return <DocumentPdf20Regular />;
+  if (mimeType?.includes('zip') || mimeType?.includes('compressed')) return <FolderZip20Regular />;
+  return <Document20Regular />;
 }
 
 export default function TaskForm({
@@ -107,7 +122,9 @@ export default function TaskForm({
     const data = {
       ...form,
       due_date: form.due_date || null,
-      recurrence_end: form.recurrence_end || null,
+      // Kept in the API for backwards compatibility, but the calendar now uses
+      // created_at as the recurrence start and due_date as its inclusive end.
+      recurrence_end: null,
     };
     // Only include subtasks on create (not edit)
     if (task) delete data.subtasks;
@@ -275,7 +292,7 @@ export default function TaskForm({
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{task ? '编辑任务' : '新建任务'}</h2>
-          <button className="btn-icon" onClick={onCancel} aria-label="关闭">✕</button>
+          <Button appearance="subtle" icon={<Dismiss20Regular />} onClick={onCancel} aria-label="关闭" />
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -342,19 +359,10 @@ export default function TaskForm({
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
+              {form.recurrence !== 'none' && (
+                <p className="form-hint">从任务创建当天开始重复，到截止日期结束；不设截止日期则持续重复。</p>
+              )}
             </div>
-            {form.recurrence !== 'none' && (
-              <div className="form-group">
-                <label htmlFor="task-recurrence-end">重复截止</label>
-                <input
-                  id="task-recurrence-end"
-                  type="date"
-                  value={form.recurrence_end}
-                  onChange={(e) => setForm({ ...form, recurrence_end: e.target.value })}
-                  placeholder="可选"
-                />
-              </div>
-            )}
           </div>
 
           {tags && tags.length > 0 && (
@@ -376,7 +384,7 @@ export default function TaskForm({
             </div>
           )}
 
-          {/* Subtasks — only on create */}
+          {/* Subtasks - only on create */}
           {!task && (
             <div className="form-group">
               <label>子任务</label>
@@ -388,14 +396,14 @@ export default function TaskForm({
                   placeholder="添加子任务..."
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSubtask(); }}}
                 />
-                <button type="button" className="btn btn-sm btn-ghost" onClick={addSubtask}>+</button>
+                <Button type="button" appearance="subtle" size="small" icon={<Add16Regular />} onClick={addSubtask} aria-label="添加子任务" />
               </div>
               {form.subtasks.length > 0 && (
                 <ul className="subtask-list">
                   {form.subtasks.map((s, i) => (
                     <li key={i} className="subtask-item">
-                      <span>○ {s}</span>
-                      <button type="button" className="btn-icon-sm" onClick={() => removeSubtask(i)}>✕</button>
+                      <span className="subtask-title"><Circle16Regular /> {s}</span>
+                      <Button type="button" appearance="subtle" size="small" icon={<Delete16Regular />} onClick={() => removeSubtask(i)} aria-label={`删除子任务${s}`} />
                     </li>
                   ))}
                 </ul>
@@ -403,7 +411,7 @@ export default function TaskForm({
             </div>
           )}
 
-          {/* Existing subtasks — managed independently while editing */}
+          {/* Existing subtasks - managed independently while editing */}
           {task && (
             <div className="form-group subtask-manager">
               <div className="subtask-section-header">
@@ -498,7 +506,7 @@ export default function TaskForm({
                             aria-label={`修改“${subtask.title}”`}
                             title="修改"
                           >
-                            ✎
+                            <Edit16Regular />
                           </button>
                           <button
                             type="button"
@@ -508,7 +516,7 @@ export default function TaskForm({
                             aria-label={`删除“${subtask.title}”`}
                             title="删除"
                           >
-                            ✕
+                            <Delete16Regular />
                           </button>
                         </div>
                       </li>
@@ -533,7 +541,7 @@ export default function TaskForm({
             </div>
           )}
 
-          {/* Attachments — files live on the local server, metadata in SQLite */}
+          {/* Attachments - files live on the local server, metadata in SQLite */}
           {task && (
             <div className="form-group attachment-manager">
               <div className="attachment-section-header">
@@ -565,7 +573,7 @@ export default function TaskForm({
                   hidden
                   onChange={(event) => uploadAttachments(event.target.files)}
                 />
-                <span className="attachment-drop-icon">📎</span>
+                <span className="attachment-drop-icon"><Attach20Regular /></span>
                 <div>
                   <strong>{attachmentsUploading ? '正在上传...' : '拖放文件到这里'}</strong>
                   <span>，或</span>
@@ -598,7 +606,7 @@ export default function TaskForm({
                           loading="lazy"
                         />
                       ) : (
-                        <span className="attachment-file-icon">{attachmentIcon(attachment.mime_type)}</span>
+                         <span className="attachment-file-icon"><AttachmentFileIcon mimeType={attachment.mime_type} /></span>
                       )}
                       <div className="attachment-info">
                         <a href={attachment.download_url} download={attachment.original_name}>
@@ -613,7 +621,7 @@ export default function TaskForm({
                         aria-label={`删除附件“${attachment.original_name}”`}
                         title="删除附件"
                       >
-                        ✕
+                        <Delete16Regular />
                       </button>
                     </li>
                   ))}
@@ -622,7 +630,7 @@ export default function TaskForm({
             </div>
           )}
           {!task && (
-            <p className="attachment-create-hint">📎 创建任务后，可在编辑窗口拖放或选择附件。</p>
+            <p className="attachment-create-hint"><Attach20Regular /> 创建任务后，可在编辑窗口拖放或选择附件。</p>
           )}
 
           {/* History / Notes - only on edit */}
@@ -653,7 +661,9 @@ export default function TaskForm({
                   {notes.map((note) => (
                     <li key={note.id} style={{marginBottom: '10px', padding: '8px', background: 'var(--surface-color)', borderRadius: '6px', borderLeft: note.source==='ai' ? '3px solid var(--tag-blue)' : '3px solid var(--text-muted)'}}>
                       <div className="note-meta" style={{display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', marginBottom: '4px'}}>
-                        <span className="note-source">{note.source === 'ai' ? '🤖 Agent' : '👤 You'}</span>
+                        <span className="note-source">
+                          {note.source === 'ai' ? <><Bot16Regular /> Agent</> : <><Person16Regular /> You</>}
+                        </span>
                         <span className="note-time">{new Date(note.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       <div className="note-content" style={{color: 'var(--text-color)'}}>{note.content}</div>

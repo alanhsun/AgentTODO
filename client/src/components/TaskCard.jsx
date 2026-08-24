@@ -1,6 +1,19 @@
+import { Button } from '@fluentui/react-components';
+import {
+  ArrowRepeatAll16Regular,
+  Attach16Regular,
+  CheckmarkCircle20Filled,
+  Circle20Regular,
+  CircleHalfFill20Regular,
+} from '@fluentui/react-icons';
+
 const PRIORITY_LABELS = { low: '低', medium: '中', high: '高', urgent: '紧急' };
 const STATUS_LABELS = { todo: '待办', in_progress: '进行中', done: '已完成' };
-const STATUS_ICONS = { todo: '○', in_progress: '◐', done: '●' };
+const STATUS_ICONS = {
+  todo: Circle20Regular,
+  in_progress: CircleHalfFill20Regular,
+  done: CheckmarkCircle20Filled,
+};
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -18,13 +31,19 @@ function formatDate(dateStr) {
   return { text: formatted, className: '' };
 }
 
-const RECURRENCE_LABELS = { daily: '每天', weekly: '每周', monthly: '每月' };
+const RECURRENCE_LABELS = {
+  daily: '每天',
+  weekdays: '每个工作日',
+  weekly: '每周',
+  monthly: '每月',
+};
 
 export default function TaskCard({ task, onEdit, onStatusChange, onSelect, selected, draggable, onDragStart }) {
   const dateInfo = formatDate(task.due_date);
   const subtaskTotal = Number(task.subtask_progress?.total || 0);
   const subtaskCompleted = Number(task.subtask_progress?.completed || 0);
   const subtaskPercent = subtaskTotal > 0 ? Math.round((subtaskCompleted / subtaskTotal) * 100) : 0;
+  const StatusIcon = STATUS_ICONS[task.status] || Circle20Regular;
 
   const handleStatusClick = (e) => {
     e.stopPropagation();
@@ -44,9 +63,14 @@ export default function TaskCard({ task, onEdit, onStatusChange, onSelect, selec
       onDragStart={onDragStart}
     >
       <div className="task-card-header">
-        <button className="status-toggle" onClick={handleStatusClick} title={`切换状态: ${STATUS_LABELS[task.status]}`}>
-          <span className={`status-icon status-${task.status}`}>{STATUS_ICONS[task.status]}</span>
-        </button>
+        <Button
+          appearance="subtle"
+          className={`status-toggle status-icon status-${task.status}`}
+          icon={<StatusIcon />}
+          onClick={handleStatusClick}
+          aria-label={`切换状态，当前为${STATUS_LABELS[task.status]}`}
+          title={`切换状态: ${STATUS_LABELS[task.status]}`}
+        />
         <div className="task-card-content">
           <h3 className="task-title">{task.title}</h3>
           {task.description && <p className="task-desc">{task.description}</p>}
@@ -81,7 +105,7 @@ export default function TaskCard({ task, onEdit, onStatusChange, onSelect, selec
             {PRIORITY_LABELS[task.priority]}
           </span>
           {task.recurrence && task.recurrence !== 'none' && (
-            <span className="recurrence-badge">🔄 {RECURRENCE_LABELS[task.recurrence]}</span>
+            <span className="recurrence-badge"><ArrowRepeatAll16Regular /> {RECURRENCE_LABELS[task.recurrence]}</span>
           )}
           {dateInfo && (
             <span className={`due-badge ${dateInfo.className}`}>
@@ -89,7 +113,7 @@ export default function TaskCard({ task, onEdit, onStatusChange, onSelect, selec
             </span>
           )}
           {Number(task.attachment_count || 0) > 0 && (
-            <span className="attachment-badge">📎 {task.attachment_count}</span>
+            <span className="attachment-badge"><Attach16Regular /> {task.attachment_count}</span>
           )}
         </div>
         {task.tags && task.tags.length > 0 && (

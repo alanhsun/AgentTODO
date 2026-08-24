@@ -196,4 +196,15 @@ describe('Task API and database integrity', () => {
     expect(response.status).toBe(400);
     expect(response.body.errors).toContain('Title must be a non-empty string');
   });
+
+  test('creates tasks that repeat on weekdays', async () => {
+    const response = await request(app).post('/api/tasks').send({
+      title: '工作日任务',
+      due_date: '2026-09-04',
+      recurrence: 'weekdays',
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.recurrence).toBe('weekdays');
+  });
 });

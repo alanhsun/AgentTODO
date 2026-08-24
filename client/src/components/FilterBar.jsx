@@ -1,3 +1,6 @@
+import { Button, Input, Select } from '@fluentui/react-components';
+import { ArrowSortDown20Regular, ArrowSortUp20Regular, Search20Regular } from '@fluentui/react-icons';
+
 const STATUS_OPTIONS = [
   { value: '', label: '全部状态' },
   { value: 'todo', label: '待办' },
@@ -29,44 +32,44 @@ export default function FilterBar({ filters, onFilterChange, tags }) {
   return (
     <div className="filter-bar">
       <div className="search-wrapper">
-        <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="8" />
-          <path d="M21 21l-4.35-4.35" />
-        </svg>
-        <input
+        <Input
           id="search-input"
-          type="text"
-          placeholder="搜索任务..."
+          aria-label="搜索任务"
+          placeholder="搜索任务"
           value={filters.search || ''}
           onChange={(e) => handleChange('search', e.target.value)}
           className="search-input"
+          contentBefore={<Search20Regular />}
         />
       </div>
 
       <div className="filter-selects">
-        <select
+        <Select
           id="filter-status"
+          aria-label="按状态筛选"
           value={filters.status || ''}
           onChange={(e) => handleChange('status', e.target.value)}
         >
           {STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
-        </select>
+        </Select>
 
-        <select
+        <Select
           id="filter-priority"
+          aria-label="按优先级筛选"
           value={filters.priority || ''}
           onChange={(e) => handleChange('priority', e.target.value)}
         >
           {PRIORITY_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
-        </select>
+        </Select>
 
         {tags && tags.length > 0 && (
-          <select
+          <Select
             id="filter-tag"
+            aria-label="按标签筛选"
             value={filters.tag || ''}
             onChange={(e) => handleChange('tag', e.target.value)}
           >
@@ -74,26 +77,28 @@ export default function FilterBar({ filters, onFilterChange, tags }) {
             {tags.map((tag) => (
               <option key={tag.id} value={tag.id}>{tag.name}</option>
             ))}
-          </select>
+          </Select>
         )}
 
-        <select
+        <Select
           id="filter-sort"
+          aria-label="排序字段"
           value={filters.sort || 'created_at'}
           onChange={(e) => handleChange('sort', e.target.value)}
         >
           {SORT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
-        </select>
+        </Select>
 
-        <button
-          className={`btn-icon sort-order ${filters.order === 'asc' ? 'asc' : ''}`}
+        <Button
+          appearance="subtle"
+          className="sort-order"
           onClick={() => handleChange('order', filters.order === 'asc' ? 'desc' : 'asc')}
+          icon={filters.order === 'asc' ? <ArrowSortUp20Regular /> : <ArrowSortDown20Regular />}
+          aria-label={filters.order === 'asc' ? '当前升序，切换为降序' : '当前降序，切换为升序'}
           title={filters.order === 'asc' ? '升序' : '降序'}
-        >
-          {filters.order === 'asc' ? '↑' : '↓'}
-        </button>
+        />
       </div>
     </div>
   );

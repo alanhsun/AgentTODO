@@ -62,7 +62,7 @@ components:
           nullable: true
         recurrence:
           type: string
-          enum: [none, daily, weekly, monthly]
+          enum: [none, daily, weekdays, weekly, monthly]
         recurrence_end:
           type: string
           format: date
@@ -154,7 +154,7 @@ components:
           nullable: true
         recurrence:
           type: string
-          enum: [none, daily, weekly, monthly]
+          enum: [none, daily, weekdays, weekly, monthly]
           default: none
         recurrence_end:
           type: string
@@ -195,7 +195,7 @@ components:
           nullable: true
         recurrence:
           type: string
-          enum: [none, daily, weekly, monthly]
+          enum: [none, daily, weekdays, weekly, monthly]
         recurrence_end:
           type: string
           format: date

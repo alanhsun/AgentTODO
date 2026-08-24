@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { CheckmarkCircle20Filled, Circle20Regular, CircleHalfFill20Regular } from '@fluentui/react-icons';
 import TaskCard from './TaskCard';
 
 const COLUMNS = [
-  { key: 'todo', label: '待办', icon: '○', color: 'var(--text-secondary)' },
-  { key: 'in_progress', label: '进行中', icon: '◐', color: 'var(--accent)' },
-  { key: 'done', label: '已完成', icon: '●', color: 'var(--success)' },
+  { key: 'todo', label: '待办', Icon: Circle20Regular, color: 'var(--text-secondary)' },
+  { key: 'in_progress', label: '进行中', Icon: CircleHalfFill20Regular, color: 'var(--accent)' },
+  { key: 'done', label: '已完成', Icon: CheckmarkCircle20Filled, color: 'var(--success)' },
 ];
 
 export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, selectedIds }) {
@@ -49,10 +50,12 @@ export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, s
 
   return (
     <div className="kanban-board">
-      {COLUMNS.map((col) => (
+      {COLUMNS.map((col) => {
+        const ColumnIcon = col.Icon;
+        return (
         <div key={col.key} className={`kanban-column kanban-col-${col.key}`}>
           <div className="kanban-column-header">
-            <span className="kanban-col-icon" style={{ color: col.color }}>{col.icon}</span>
+            <span className="kanban-col-icon" style={{ color: col.color }}><ColumnIcon /></span>
             <span className="kanban-col-title">{col.label}</span>
             <span className="kanban-col-count">{grouped[col.key].length}</span>
           </div>
@@ -79,7 +82,8 @@ export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, s
             ))}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

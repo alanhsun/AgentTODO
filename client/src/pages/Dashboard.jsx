@@ -1,4 +1,32 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  Button,
+  FluentProvider,
+  Skeleton,
+  SkeletonItem,
+  webDarkTheme,
+  webLightTheme,
+} from '@fluentui/react-components';
+import {
+  Add20Regular,
+  ArrowReset20Regular,
+  Board20Regular,
+  Calendar20Regular,
+  CheckmarkCircle20Filled,
+  CheckmarkSquare24Regular,
+  Circle20Regular,
+  CircleHalfFill20Regular,
+  ClipboardTaskListLtr20Regular,
+  Delete20Regular,
+  DocumentArrowDown20Regular,
+  DocumentArrowUp20Regular,
+  List20Regular,
+  Navigation20Regular,
+  Person20Regular,
+  Tag20Regular,
+  WeatherMoon20Regular,
+  WeatherSunny20Regular,
+} from '@fluentui/react-icons';
 import { tasksApi, backupApi } from '../api';
 import { useTasks, useTags, useTaskSummary } from '../hooks/useTasks';
 import TaskCard from '../components/TaskCard';
@@ -7,6 +35,22 @@ import FilterBar from '../components/FilterBar';
 import TagManager from '../components/TagManager';
 import KanbanBoard from '../components/KanbanBoard';
 import CalendarBoard from '../components/CalendarBoard';
+
+function TaskListSkeleton() {
+  return (
+    <Skeleton className="task-list-skeleton" aria-label="正在加载任务">
+      {[0, 1, 2].map((item) => (
+        <div className="task-skeleton-row" key={item}>
+          <SkeletonItem shape="circle" size={20} />
+          <div className="task-skeleton-copy">
+            <SkeletonItem size={16} />
+            <SkeletonItem size={12} />
+          </div>
+        </div>
+      ))}
+    </Skeleton>
+  );
+}
 
 export default function Dashboard() {
   const [filters, setFilters] = useState({ sort: 'created_at', order: 'desc', page: 1, limit: 20 });
@@ -184,52 +228,63 @@ export default function Dashboard() {
   const inProgressCnt = summary?.by_status?.in_progress || 0;
   const doneCnt = summary?.by_status?.done || 0;
   const totalCnt = summary?.total || 0;
+  const completionRate = totalCnt > 0 ? Math.round((doneCnt / totalCnt) * 100) : 0;
+  const hasActiveFilters = Boolean(filters.status || filters.priority || filters.tag || filters.search);
+  const todayLabel = useMemo(
+    () => new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
+      .format(new Date())
+      .replace(/日(?=星期)/, '日 '),
+    [],
+  );
 
   return (
+    <FluentProvider theme={theme === 'dark' ? webDarkTheme : webLightTheme} className="fluent-app">
     <div className={`dashboard ${viewMode === 'kanban' || viewMode === 'calendar' ? 'kanban-mode' : ''}`}>
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* Sidebar — hidden in kanban mode via CSS */}
+      {/* Sidebar - hidden in kanban mode via CSS */}
       <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
           <div className="brand">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="brand-icon">
-              <path d="M9 11l3 3L22 4" />
-              <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-            </svg>
-            <span>AgentTODO</span>
+            <span className="brand-mark"><CheckmarkSquare24Regular className="brand-icon" /></span>
+            <span className="brand-copy">
+              <strong>AgentTODO</strong>
+              <small>本地任务空间</small>
+            </span>
           </div>
         </div>
 
         <nav className="sidebar-nav">
+          <span className="sidebar-label">任务视图</span>
           <button className={`nav-item ${filters.status === '' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: '', page: 1 })}>
-            <span className="nav-icon">📋</span>
+            <span className="nav-icon"><ClipboardTaskListLtr20Regular /></span>
             <span>全部任务</span>
             <span className="nav-badge">{totalCnt}</span>
           </button>
           <button className={`nav-item ${filters.status === 'todo' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: 'todo', page: 1 })}>
-            <span className="nav-icon">○</span>
+            <span className="nav-icon"><Circle20Regular /></span>
             <span>待办</span>
             {todoCnt > 0 && <span className="nav-badge">{todoCnt}</span>}
           </button>
           <button className={`nav-item ${filters.status === 'in_progress' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: 'in_progress', page: 1 })}>
-            <span className="nav-icon">◐</span>
+            <span className="nav-icon"><CircleHalfFill20Regular /></span>
             <span>进行中</span>
             {inProgressCnt > 0 && <span className="nav-badge">{inProgressCnt}</span>}
           </button>
           <button className={`nav-item ${filters.status === 'done' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: 'done', page: 1 })}>
-            <span className="nav-icon">●</span>
+            <span className="nav-icon"><CheckmarkCircle20Filled /></span>
             <span>已完成</span>
             {doneCnt > 0 && <span className="nav-badge">{doneCnt}</span>}
           </button>
         </nav>
 
         <div className="sidebar-section">
+          <span className="sidebar-label">整理工具</span>
           <button className="nav-item" onClick={() => setShowTags(!showTags)}>
-            <span className="nav-icon">🏷️</span>
+            <span className="nav-icon"><Tag20Regular /></span>
             <span>标签管理</span>
             <span className="nav-arrow">{showTags ? '▾' : '▸'}</span>
           </button>
@@ -238,12 +293,12 @@ export default function Dashboard() {
 
         <div className="sidebar-footer">
           <div className="user-info">
-            <div className="user-avatar">📋</div>
+            <div className="user-avatar"><Person20Regular /></div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span className="user-name">本地用户</span>
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <button className="btn-icon-sm" onClick={handleExport} title="导出包含附件的 ZIP 完整备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导出</button>
-                <button className="btn-icon-sm" onClick={() => fileInputRef.current?.click()} title="导入 ZIP 完整备份或旧版 JSON 备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导入</button>
+                <Button appearance="subtle" size="small" icon={<DocumentArrowDown20Regular />} onClick={handleExport} title="导出包含附件的 ZIP 完整备份">导出</Button>
+                <Button appearance="subtle" size="small" icon={<DocumentArrowUp20Regular />} onClick={() => fileInputRef.current?.click()} title="导入 ZIP 完整备份或旧版 JSON 备份">导入</Button>
                 <input type="file" ref={fileInputRef} onChange={handleImport} accept=".zip,.json" style={{ display: 'none' }} />
               </div>
             </div>
@@ -260,36 +315,31 @@ export default function Dashboard() {
             onClick={() => setIsMobileMenuOpen(true)}
             title="打开菜单"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="12" x2="21" y2="12"></line>
-              <line x1="3" y1="6" x2="21" y2="6"></line>
-              <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
+            <Navigation20Regular />
           </button>
 
-          {/* Brand inline — only shows in full screen mode */}
+          {/* Brand inline - only shows in full screen mode */}
           {(viewMode === 'kanban' || viewMode === 'calendar') && (
             <div className="header-brand">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="brand-icon">
-                <path d="M9 11l3 3L22 4" />
-                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-              </svg>
+              <CheckmarkSquare24Regular className="brand-icon" />
             </div>
           )}
-          <div>
+          <div className="main-heading">
+            <span className="dashboard-date">{todayLabel}</span>
             <h1>我的任务</h1>
-            <div className="stats-row">
-              <span className="stat"><span className="stat-dot todo"></span>待办 {todoCnt}</span>
-              <span className="stat"><span className="stat-dot in-progress"></span>进行中 {inProgressCnt}</span>
-              <span className="stat"><span className="stat-dot done"></span>已完成 {doneCnt}</span>
-            </div>
+            <p className="dashboard-subtitle">集中查看、安排和推进本地任务</p>
           </div>
           <div className="header-actions">
             {/* Space holder for kanban mode */}
             {/* Theme toggle */}
-            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换到日间模式' : '切换到夜间模式'}>
-              {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
+            <Button
+              appearance="subtle"
+              className="theme-toggle"
+              icon={theme === 'dark' ? <WeatherSunny20Regular /> : <WeatherMoon20Regular />}
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? '切换到日间模式' : '切换到夜间模式'}
+              title={theme === 'dark' ? '切换到日间模式' : '切换到夜间模式'}
+            />
             {/* View mode toggle */}
             <div className="view-toggle">
               <button
@@ -297,77 +347,125 @@ export default function Dashboard() {
                 onClick={() => setViewMode('list')}
                 title="列表视图"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <line x1="1" y1="3" x2="15" y2="3" />
-                  <line x1="1" y1="8" x2="15" y2="8" />
-                  <line x1="1" y1="13" x2="15" y2="13" />
-                </svg>
+                <List20Regular />
               </button>
               <button
                 className={`view-toggle-btn ${viewMode === 'kanban' ? 'active' : ''}`}
                 onClick={() => setViewMode('kanban')}
                 title="看板视图"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="1" y="1" width="3.5" height="14" rx="1" />
-                  <rect x="6.25" y="1" width="3.5" height="10" rx="1" />
-                  <rect x="11.5" y="1" width="3.5" height="7" rx="1" />
-                </svg>
+                <Board20Regular />
               </button>
               <button
                 className={`view-toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
                 onClick={() => setViewMode('calendar')}
                 title="日历视图"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="2" y="3" width="12" height="11" rx="1" />
-                  <line x1="2" y1="7" x2="14" y2="7" />
-                  <line x1="5" y1="1" x2="5" y2="4" />
-                  <line x1="11" y1="1" x2="11" y2="4" />
-                </svg>
+                <Calendar20Regular />
               </button>
             </div>
-            <button className="btn btn-primary" onClick={() => { setEditingTask(null); setShowForm(true); }}>
-              + 新建任务
-            </button>
+            <Button appearance="primary" icon={<Add20Regular />} className="primary-action" onClick={() => { setEditingTask(null); setShowForm(true); }}>
+              新建任务
+            </Button>
           </div>
         </div>
 
-        {/* Filter bar — only in list mode */}
-        {viewMode === 'list' && (
-          <FilterBar filters={filters} onFilterChange={setFilters} tags={tags} />
-        )}
-
-        {/* Batch actions */}
-        {selectedIds.length > 0 && (
-          <div className="batch-bar">
-            <span>已选 {selectedIds.length} 项</span>
-            <button className="btn btn-sm" onClick={() => handleBatchAction('update_status', 'done')} disabled={batchLoading}>✓ 标为完成</button>
-            <button className="btn btn-sm" onClick={() => handleBatchAction('update_status', 'todo')} disabled={batchLoading}>↺ 标为待办</button>
-            <button className="btn btn-sm btn-danger" onClick={() => { if (confirm('确定删除所选任务？')) handleBatchAction('delete'); }} disabled={batchLoading}>✕ 删除</button>
-            <button className="btn btn-sm btn-ghost" onClick={() => setSelectedIds([])}>取消选择</button>
-          </div>
-        )}
-
         {/* Task views */}
         {viewMode === 'list' ? (
-          <>
+          <div className="list-view-shell">
+            <section className="overview-grid" aria-label="任务总览">
+              <button
+                className={`overview-card overview-main ${filters.status === '' ? 'active' : ''}`}
+                onClick={() => setFilters({ ...filters, status: '', page: 1 })}
+              >
+                <span className="overview-icon"><ClipboardTaskListLtr20Regular /></span>
+                <span className="overview-copy">
+                  <span className="overview-label">全部任务</span>
+                  <strong>{totalCnt}</strong>
+                  <span className="overview-note">当前任务总量</span>
+                </span>
+                <span className="completion-ring" style={{ '--completion': `${completionRate * 3.6}deg` }}>
+                  <span>{completionRate}%</span>
+                </span>
+              </button>
+              <button
+                className={`overview-card ${filters.status === 'todo' ? 'active' : ''}`}
+                onClick={() => setFilters({ ...filters, status: 'todo', page: 1 })}
+              >
+                <span className="overview-icon status-todo"><Circle20Regular /></span>
+                <span className="overview-copy">
+                  <span className="overview-label">待办</span>
+                  <strong>{todoCnt}</strong>
+                  <span className="overview-note">等待处理</span>
+                </span>
+              </button>
+              <button
+                className={`overview-card ${filters.status === 'in_progress' ? 'active' : ''}`}
+                onClick={() => setFilters({ ...filters, status: 'in_progress', page: 1 })}
+              >
+                <span className="overview-icon status-in_progress"><CircleHalfFill20Regular /></span>
+                <span className="overview-copy">
+                  <span className="overview-label">进行中</span>
+                  <strong>{inProgressCnt}</strong>
+                  <span className="overview-note">正在推进</span>
+                </span>
+              </button>
+              <button
+                className={`overview-card ${filters.status === 'done' ? 'active' : ''}`}
+                onClick={() => setFilters({ ...filters, status: 'done', page: 1 })}
+              >
+                <span className="overview-icon status-done"><CheckmarkCircle20Filled /></span>
+                <span className="overview-copy">
+                  <span className="overview-label">已完成</span>
+                  <strong>{doneCnt}</strong>
+                  <span className="overview-note">完成率 {completionRate}%</span>
+                </span>
+              </button>
+            </section>
+
+            <section className="list-surface" aria-label="任务清单">
+              <div className="list-surface-header">
+                <div>
+                  <h2>任务清单</h2>
+                  <span>当前显示 {pagination.total || 0} 项</span>
+                </div>
+              </div>
+
+              <FilterBar filters={filters} onFilterChange={setFilters} tags={tags} />
+
+              {selectedIds.length > 0 && (
+                <div className="batch-bar">
+                  <span>已选 {selectedIds.length} 项</span>
+                  <Button size="small" icon={<CheckmarkCircle20Filled />} onClick={() => handleBatchAction('update_status', 'done')} disabled={batchLoading}>标为完成</Button>
+                  <Button size="small" icon={<ArrowReset20Regular />} onClick={() => handleBatchAction('update_status', 'todo')} disabled={batchLoading}>标为待办</Button>
+                  <Button size="small" appearance="subtle" icon={<Delete20Regular />} className="danger-action" onClick={() => { if (confirm('确定删除所选任务？')) handleBatchAction('delete'); }} disabled={batchLoading}>删除</Button>
+                  <Button size="small" appearance="subtle" onClick={() => setSelectedIds([])}>取消选择</Button>
+                </div>
+              )}
+
             <div className="task-list">
               {loading && tasks.length === 0 && (
                 <div className="loading-state">
-                  <div className="spinner"></div>
-                  <p>加载中...</p>
+                  <TaskListSkeleton />
                 </div>
               )}
 
               {!loading && tasks.length === 0 && (
                 <div className="empty-state">
-                  <div className="empty-icon">📝</div>
-                  <h3>还没有任务</h3>
-                  <p>点击「新建任务」按钮开始添加你的第一个任务吧！</p>
-                  <button className="btn btn-primary" onClick={() => { setEditingTask(null); setShowForm(true); }}>
-                    + 新建任务
-                  </button>
+                  <ClipboardTaskListLtr20Regular className="empty-icon" />
+                  <h3>{hasActiveFilters ? '没有符合条件的任务' : '还没有任务'}</h3>
+                  <p>{hasActiveFilters ? '调整筛选条件，或者清除筛选查看全部任务。' : '创建第一项任务，开始安排接下来的工作。'}</p>
+                  {hasActiveFilters ? (
+                    <Button
+                      appearance="primary"
+                      icon={<ArrowReset20Regular />}
+                      onClick={() => setFilters({ ...filters, status: '', priority: '', tag: '', search: '', page: 1 })}
+                    >
+                      清除筛选
+                    </Button>
+                  ) : (
+                    <Button appearance="primary" icon={<Add20Regular />} onClick={() => { setEditingTask(null); setShowForm(true); }}>新建任务</Button>
+                  )}
                 </div>
               )}
 
@@ -405,13 +503,13 @@ export default function Dashboard() {
                 </button>
               </div>
             )}
-          </>
+            </section>
+          </div>
         ) : viewMode === 'kanban' ? (
           <div className="kanban-wrapper">
             {kanbanLoading && kanbanTasks.length === 0 ? (
               <div className="loading-state">
-                <div className="spinner"></div>
-                <p>加载中...</p>
+                <TaskListSkeleton />
               </div>
             ) : (
               <KanbanBoard
@@ -427,8 +525,7 @@ export default function Dashboard() {
           <div className="kanban-wrapper">
             {kanbanLoading && kanbanTasks.length === 0 ? (
               <div className="loading-state">
-                <div className="spinner"></div>
-                <p>加载中...</p>
+                <TaskListSkeleton />
               </div>
             ) : (
               <CalendarBoard
@@ -452,5 +549,6 @@ export default function Dashboard() {
         />
       )}
     </div>
+    </FluentProvider>
   );
 }

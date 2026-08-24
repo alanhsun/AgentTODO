@@ -112,7 +112,7 @@ POST /api/tasks
   "status": "todo | in_progress | done, 默认 todo",
   "priority": "low | medium | high | urgent, 默认 medium",
   "due_date": "YYYY-MM-DD, 可选",
-  "recurrence": "none | daily | weekly | monthly, 默认 none",
+  "recurrence": "none | daily | weekdays | weekly | monthly, 默认 none",
   "tags": [1, 2],
   "subtasks": ["子任务1", "子任务2"]
 }

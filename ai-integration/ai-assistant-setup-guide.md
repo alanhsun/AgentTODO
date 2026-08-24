@@ -72,7 +72,7 @@
       "title": {"type": "string", "description": "任务的标题"},
       "priority": {"type": "string", "description": "low, medium, high, urgent 选一个"},
       "due_date": {"type": "string", "description": "截止日期 YYYY-MM-DD"},
-      "recurrence": {"type": "string", "description": "none, daily, weekly, monthly 选一个"},
+      "recurrence": {"type": "string", "description": "none, daily, weekdays, weekly, monthly 选一个"},
       "subtasks": {"type": "array", "items": {"type": "string"}, "description": "细分的执行步骤列表"}
     },
     "required": ["title"]

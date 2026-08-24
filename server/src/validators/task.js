@@ -1,6 +1,6 @@
 const VALID_STATUSES = ['todo', 'in_progress', 'done'];
 const VALID_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
-const VALID_RECURRENCES = ['none', 'daily', 'weekly', 'monthly'];
+const VALID_RECURRENCES = ['none', 'daily', 'weekdays', 'weekly', 'monthly'];
 
 function isValidDateOnly(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -111,4 +111,11 @@ function validateBatchInput(data) {
   return errors;
 }
 
-module.exports = { validateTaskInput, validateBatchInput, isValidDateOnly, VALID_STATUSES, VALID_PRIORITIES };
+module.exports = {
+  validateTaskInput,
+  validateBatchInput,
+  isValidDateOnly,
+  VALID_STATUSES,
+  VALID_PRIORITIES,
+  VALID_RECURRENCES,
+};
