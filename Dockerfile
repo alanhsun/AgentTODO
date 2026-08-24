@@ -1,5 +1,5 @@
 # Build stage — install from the single workspace lockfile and compile the frontend
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY client/ ./client/
 RUN npm run build --workspace=client
 
 # Production dependency stage — compile sqlite3 without retaining build tools
-FROM node:20-alpine AS server-dependencies
+FROM node:26-alpine AS server-dependencies
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ RUN apk add --no-cache --virtual .build-deps python3 make g++ \
     && npm cache clean --force
 
 # Minimal runtime stage
-FROM node:20-alpine
+FROM node:26-alpine
 
 WORKDIR /app
 
