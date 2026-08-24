@@ -53,6 +53,9 @@ docker-compose up -d
 | `HOST` | 本机运行 `127.0.0.1`；Compose `0.0.0.0` | 服务监听地址 |
 | `PORT` | `3300` | 后端服务监听端口 |
 | `DB_PATH` | `/data/tasks.db` | SQLite 数据库文件路径 |
+| `ATTACHMENT_DIR` | `/data/attachments` | 任务附件文件目录 |
+| `ATTACHMENT_MAX_SIZE_MB` | `20` | 单个附件大小上限（MB） |
+| `BACKUP_MAX_SIZE_MB` | `1024` | ZIP 完整备份导入上限（MB） |
 | `NODE_ENV` | `production` | 运行环境 |
 | `APP_TIMEZONE` | `Asia/Shanghai` | “今天”与定时任务使用的时区 |
 | `API_TOKEN` | 空 | 可选访问令牌；留空仅适用于可信网络 |
@@ -86,22 +89,25 @@ npm run dev
 ## 💾 数据备份与恢复
 
 <!-- @purpose -->
-说明如何备份和还原存储在 Docker Volume 中的 SQLite 数据库，防止数据丢失。
+网页左下角的“导出”默认生成包含数据库与附件的 ZIP 完整备份；“导入”支持该 ZIP，也兼容旧版 JSON。ZIP 恢复会校验附件大小和 SHA-256。
+
+如需从 Docker 宿主机手工备份，应备份整个 `/data`，因为附件位于 `/data/attachments`，不能只复制数据库。
 <!-- /purpose -->
 
 ### 备份流程
 <!-- @input -->
 ```bash
-# 从容器内将数据库文件拷贝到宿主机
-docker cp agenttodo:/data/tasks.db ./backup-$(date +%Y%m%d).db
+# 从容器内复制完整数据目录（数据库和附件）
+docker cp agenttodo:/data ./agenttodo-data-backup
 ```
 <!-- /input -->
 
 ### 恢复流程
 <!-- @input -->
 ```bash
-# 将备份文件覆盖回容器，并重启服务生效
-docker cp ./backup.db agenttodo:/data/tasks.db
+# 停止服务后恢复完整数据目录，再重新启动
+docker stop agenttodo
+docker cp ./agenttodo-data-backup/. agenttodo:/data
 docker restart agenttodo
 ```
 <!-- /input -->

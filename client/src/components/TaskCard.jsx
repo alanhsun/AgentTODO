@@ -88,6 +88,9 @@ export default function TaskCard({ task, onEdit, onStatusChange, onSelect, selec
               {dateInfo.text}
             </span>
           )}
+          {Number(task.attachment_count || 0) > 0 && (
+            <span className="attachment-badge">📎 {task.attachment_count}</span>
+          )}
         </div>
         {task.tags && task.tags.length > 0 && (
           <div className="task-tags">

@@ -162,7 +162,20 @@ DELETE /api/tasks/:id/subtasks/:sid      # 删除子任务
 ```
 <!-- /input -->
 
-### 3.2 任务备注 (进展日志)
+### 3.2 任务附件
+<!-- @input -->
+```http
+GET    /api/tasks/:id/attachments                         # 获取附件列表
+POST   /api/tasks/:id/attachments                         # multipart/form-data，字段名 file
+GET    /api/tasks/:id/attachments/:aid/download           # 下载原文件
+GET    /api/tasks/:id/attachments/:aid/preview            # 预览 JPEG/PNG/GIF/WebP
+DELETE /api/tasks/:id/attachments/:aid                    # 删除附件及磁盘文件
+```
+
+附件文件保存在 `ATTACHMENT_DIR`，SQLite 仅保存名称、类型、大小和 SHA-256 等元数据。默认单文件上限为 20 MB，可通过 `ATTACHMENT_MAX_SIZE_MB` 调整。
+<!-- /input -->
+
+### 3.3 任务备注 (进展日志)
 <!-- @input -->
 ```http
 GET    /api/tasks/:id/notes              # 获取备注列表
@@ -226,6 +239,19 @@ GET /api/health
 }
 ```
 <!-- /output -->
+
+### 5.3 备份与恢复
+<!-- @input -->
+```http
+GET  /api/backup/export.zip     # 推荐：数据库和附件完整 ZIP 备份
+POST /api/backup/import.zip     # multipart/form-data，字段名 backup
+
+GET  /api/backup/export         # 兼容旧版：仅 JSON，不含附件文件
+POST /api/backup/import         # 兼容旧版 JSON 恢复
+```
+
+ZIP 恢复会核验附件大小与 SHA-256。旧版 JSON 恢复不包含附件，因此会清除当前附件；日常使用应优先选择 ZIP。
+<!-- /input -->
 
 <!-- @references -->
 - 想通过命令行调用？[参阅 CLI 技能指南](./cli-skill-guide.md)

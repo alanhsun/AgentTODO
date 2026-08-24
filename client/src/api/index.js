@@ -1,9 +1,10 @@
 const API_BASE = '/api';
 
 async function request(url, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const res = await fetch(`${API_BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: isFormData ? options.headers : { 'Content-Type': 'application/json', ...options.headers },
   });
   const data = await res.json();
   if (!res.ok) {
@@ -33,6 +34,14 @@ export const tasksApi = {
   addSubtask: (taskId, title) => request(`/tasks/${taskId}/subtasks`, { method: 'POST', body: JSON.stringify({ title }) }),
   updateSubtask: (taskId, id, data) => request(`/tasks/${taskId}/subtasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteSubtask: (taskId, id) => request(`/tasks/${taskId}/subtasks/${id}`, { method: 'DELETE' }),
+  // Attachments
+  listAttachments: (taskId) => request(`/tasks/${taskId}/attachments`),
+  uploadAttachment: (taskId, file) => {
+    const body = new FormData();
+    body.append('file', file);
+    return request(`/tasks/${taskId}/attachments`, { method: 'POST', body });
+  },
+  deleteAttachment: (taskId, id) => request(`/tasks/${taskId}/attachments/${id}`, { method: 'DELETE' }),
   // Notes
   listNotes: (taskId) => request(`/tasks/${taskId}/notes`),
   addNote: (taskId, content, source = 'user') => request(`/tasks/${taskId}/notes`, { method: 'POST', body: JSON.stringify({ content, source }) }),
@@ -51,5 +60,15 @@ export const tagsApi = {
 export const backupApi = {
   export: () => request('/backup/export'),
   import: (body) => request('/backup/import', { method: 'POST', body: JSON.stringify(body) }),
+  exportFull: async () => {
+    const response = await fetch(`${API_BASE}/backup/export.zip`);
+    if (!response.ok) throw new Error('完整备份导出失败');
+    return response.blob();
+  },
+  importFull: (file) => {
+    const body = new FormData();
+    body.append('backup', file);
+    return request('/backup/import.zip', { method: 'POST', body });
+  },
 };
 

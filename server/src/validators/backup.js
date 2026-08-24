@@ -1,17 +1,22 @@
 const BACKUP_TABLES = ['tasks', 'tags', 'task_tags', 'subtasks', 'task_notes', 'webhooks'];
+const FULL_BACKUP_TABLES = [...BACKUP_TABLES, 'task_attachments'];
 const MAX_BACKUP_RECORDS = 100000;
 
-function validateBackup(backup) {
+function validateBackup(backup, { allowedVersions = [1] } = {}) {
   if (!backup || typeof backup !== 'object' || Array.isArray(backup)) {
     return 'Invalid backup format';
   }
-  if (backup.version !== 1 || !backup.data || typeof backup.data !== 'object') {
+  if (!allowedVersions.includes(backup.version) || !backup.data || typeof backup.data !== 'object') {
     return 'Unsupported or missing backup version';
   }
 
   let totalRecords = 0;
-  for (const table of BACKUP_TABLES) {
+  const tables = backup.version === 2 ? FULL_BACKUP_TABLES : BACKUP_TABLES;
+  for (const table of tables) {
     const rows = backup.data[table];
+    if (backup.version === 2 && rows === undefined) {
+      return `Backup field ${table} is required`;
+    }
     if (rows !== undefined && !Array.isArray(rows)) {
       return `Backup field ${table} must be an array`;
     }
@@ -24,4 +29,4 @@ function validateBackup(backup) {
   return null;
 }
 
-module.exports = { validateBackup, BACKUP_TABLES, MAX_BACKUP_RECORDS };
+module.exports = { validateBackup, BACKUP_TABLES, FULL_BACKUP_TABLES, MAX_BACKUP_RECORDS };

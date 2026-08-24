@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { tasksApi } from '../api';
 
 const PRIORITY_OPTIONS = [
@@ -35,7 +35,27 @@ function createInitialForm(task) {
   };
 }
 
-export default function TaskForm({ task, tags, onSubmit, onCancel, onSubtasksChanged }) {
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function attachmentIcon(mimeType) {
+  if (mimeType?.startsWith('image/')) return '🖼️';
+  if (mimeType === 'application/pdf') return '📕';
+  if (mimeType?.includes('zip') || mimeType?.includes('compressed')) return '🗜️';
+  return '📄';
+}
+
+export default function TaskForm({
+  task,
+  tags,
+  onSubmit,
+  onCancel,
+  onSubtasksChanged,
+  onAttachmentsChanged,
+}) {
   const [form, setForm] = useState(() => createInitialForm(task));
   const [newSubtask, setNewSubtask] = useState('');
   const [subtasks, setSubtasks] = useState([]);
@@ -45,8 +65,14 @@ export default function TaskForm({ task, tags, onSubmit, onCancel, onSubtasksCha
   const [editingSubtaskId, setEditingSubtaskId] = useState(null);
   const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
   const [busySubtaskId, setBusySubtaskId] = useState(null);
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(Boolean(task));
+  const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [attachmentDragActive, setAttachmentDragActive] = useState(false);
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
+  const attachmentInputRef = useRef(null);
 
   useEffect(() => {
     if (!task) return undefined;
@@ -55,17 +81,22 @@ export default function TaskForm({ task, tags, onSubmit, onCancel, onSubtasksCha
     Promise.all([
       tasksApi.listSubtasks(task.id),
       tasksApi.listNotes(task.id),
+      tasksApi.listAttachments(task.id),
     ])
-      .then(([loadedSubtasks, loadedNotes]) => {
+      .then(([loadedSubtasks, loadedNotes, loadedAttachments]) => {
         if (!active) return;
         setSubtasks(loadedSubtasks);
         setNotes(loadedNotes);
+        setAttachments(loadedAttachments);
       })
       .catch((err) => {
-        if (active) setSubtaskError(`加载子任务失败：${err.message}`);
+        if (active) setSubtaskError(`加载任务详情失败：${err.message}`);
       })
       .finally(() => {
-        if (active) setSubtasksLoading(false);
+        if (active) {
+          setSubtasksLoading(false);
+          setAttachmentsLoading(false);
+        }
       });
 
     return () => { active = false; };
@@ -185,6 +216,40 @@ export default function TaskForm({ task, tags, onSubmit, onCancel, onSubtasksCha
       setSubtaskError(error.message);
     } finally {
       setBusySubtaskId(null);
+    }
+  };
+
+  const uploadAttachments = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!task || files.length === 0) return;
+
+    setAttachmentsUploading(true);
+    setAttachmentError('');
+    let uploadedAny = false;
+    try {
+      for (const file of files) {
+        const uploaded = await tasksApi.uploadAttachment(task.id, file);
+        setAttachments((prev) => [uploaded, ...prev]);
+        uploadedAny = true;
+      }
+    } catch (error) {
+      setAttachmentError(error.message);
+    } finally {
+      if (uploadedAny) onAttachmentsChanged?.();
+      setAttachmentsUploading(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    }
+  };
+
+  const deleteAttachment = async (attachment) => {
+    if (!confirm(`确定删除附件“${attachment.original_name}”吗？`)) return;
+    setAttachmentError('');
+    try {
+      await tasksApi.deleteAttachment(task.id, attachment.id);
+      setAttachments((prev) => prev.filter((item) => item.id !== attachment.id));
+      onAttachmentsChanged?.();
+    } catch (error) {
+      setAttachmentError(error.message);
     }
   };
 
@@ -466,6 +531,98 @@ export default function TaskForm({ task, tags, onSubmit, onCancel, onSubtasksCha
                 </>
               )}
             </div>
+          )}
+
+          {/* Attachments — files live on the local server, metadata in SQLite */}
+          {task && (
+            <div className="form-group attachment-manager">
+              <div className="attachment-section-header">
+                <label>附件</label>
+                <span>{attachments.length} 个文件</span>
+              </div>
+
+              <div
+                className={`attachment-drop-zone ${attachmentDragActive ? 'drag-active' : ''}`}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  setAttachmentDragActive(true);
+                }}
+                onDragOver={(event) => event.preventDefault()}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  if (!event.currentTarget.contains(event.relatedTarget)) setAttachmentDragActive(false);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setAttachmentDragActive(false);
+                  uploadAttachments(event.dataTransfer.files);
+                }}
+              >
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(event) => uploadAttachments(event.target.files)}
+                />
+                <span className="attachment-drop-icon">📎</span>
+                <div>
+                  <strong>{attachmentsUploading ? '正在上传...' : '拖放文件到这里'}</strong>
+                  <span>，或</span>
+                  <button
+                    type="button"
+                    className="attachment-select-button"
+                    disabled={attachmentsUploading}
+                    onClick={() => attachmentInputRef.current?.click()}
+                  >
+                    选择文件
+                  </button>
+                </div>
+                <small>单文件默认最大 20 MB，以服务器配置为准</small>
+              </div>
+
+              {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}
+              {attachmentsLoading ? (
+                <p className="attachment-empty">正在加载附件...</p>
+              ) : attachments.length === 0 ? (
+                <p className="attachment-empty">暂无附件。</p>
+              ) : (
+                <ul className="attachment-list">
+                  {attachments.map((attachment) => (
+                    <li key={attachment.id} className="attachment-item">
+                      {attachment.preview_url ? (
+                        <img
+                          className="attachment-thumbnail"
+                          src={attachment.preview_url}
+                          alt=""
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="attachment-file-icon">{attachmentIcon(attachment.mime_type)}</span>
+                      )}
+                      <div className="attachment-info">
+                        <a href={attachment.download_url} download={attachment.original_name}>
+                          {attachment.original_name}
+                        </a>
+                        <span>{formatFileSize(attachment.size)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-icon-sm"
+                        onClick={() => deleteAttachment(attachment)}
+                        aria-label={`删除附件“${attachment.original_name}”`}
+                        title="删除附件"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {!task && (
+            <p className="attachment-create-hint">📎 创建任务后，可在编辑窗口拖放或选择附件。</p>
           )}
 
           {/* History / Notes - only on edit */}

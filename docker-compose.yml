@@ -15,6 +15,9 @@ services:
       - PORT=3300
       - AGENTTODO_URL=http://localhost:3300/api
       - DB_PATH=/data/tasks.db
+      - ATTACHMENT_DIR=/data/attachments
+      - ATTACHMENT_MAX_SIZE_MB=${ATTACHMENT_MAX_SIZE_MB:-20}
+      - BACKUP_MAX_SIZE_MB=${BACKUP_MAX_SIZE_MB:-1024}
       - APP_TIMEZONE=${APP_TIMEZONE:-Asia/Shanghai}
       # 留空保持原有零认证模式；在非完全可信的局域网中建议设置长随机值。
       - API_TOKEN=${API_TOKEN:-}

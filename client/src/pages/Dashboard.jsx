@@ -102,6 +102,11 @@ export default function Dashboard() {
     if (viewMode === 'kanban' || viewMode === 'calendar') kanbanRefetch();
   };
 
+  const handleAttachmentsChanged = () => {
+    refetch();
+    if (viewMode === 'kanban' || viewMode === 'calendar') kanbanRefetch();
+  };
+
   const handleSelect = (id) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
@@ -140,12 +145,11 @@ export default function Dashboard() {
 
   const handleExport = async () => {
     try {
-      const data = await backupApi.export();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const blob = await backupApi.exportFull();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `agenttodo-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `agenttodo-full-backup-${new Date().toISOString().slice(0, 10)}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -157,24 +161,22 @@ export default function Dashboard() {
 
   const handleImport = async (e) => {
     const file = e.target.files[0];
+    e.target.value = null;
     if(!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = JSON.parse(event.target.result);
-        if(!confirm('确定要导入这个备份文件吗？这将覆盖当前的所有数据。')) {
-          e.target.value = null;
-          return;
-        }
+    if(!confirm('确定要导入这个备份文件吗？这将覆盖当前的所有任务、附件和设置。')) return;
+
+    try {
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        await backupApi.importFull(file);
+      } else {
+        const data = JSON.parse(await file.text());
         await backupApi.import(data);
-        alert('导入成功');
-        window.location.reload();
-      } catch(err) {
-        alert('导入失败: ' + err.message);
       }
-    };
-    reader.readAsText(file);
-    e.target.value = null; // reset
+      alert('导入成功');
+      window.location.reload();
+    } catch(err) {
+      alert('导入失败: ' + err.message);
+    }
   };
 
   // Header counts using summary API to get accurate global data
@@ -240,9 +242,9 @@ export default function Dashboard() {
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span className="user-name">本地用户</span>
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <button className="btn-icon-sm" onClick={handleExport} title="导出全量备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导出</button>
-                <button className="btn-icon-sm" onClick={() => fileInputRef.current?.click()} title="导入全量备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导入</button>
-                <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" style={{ display: 'none' }} />
+                <button className="btn-icon-sm" onClick={handleExport} title="导出包含附件的 ZIP 完整备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导出</button>
+                <button className="btn-icon-sm" onClick={() => fileInputRef.current?.click()} title="导入 ZIP 完整备份或旧版 JSON 备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导入</button>
+                <input type="file" ref={fileInputRef} onChange={handleImport} accept=".zip,.json" style={{ display: 'none' }} />
               </div>
             </div>
           </div>
@@ -445,6 +447,7 @@ export default function Dashboard() {
           tags={tags}
           onSubmit={handleCreateOrUpdate}
           onSubtasksChanged={handleSubtasksChanged}
+          onAttachmentsChanged={handleAttachmentsChanged}
           onCancel={() => { setShowForm(false); setEditingTask(null); }}
         />
       )}

@@ -5,6 +5,7 @@ const fs = require('fs');
 const config = require('./config');
 const taskRoutes = require('./routes/tasks');
 const subtasksNotesRoutes = require('./routes/subtasks-notes');
+const attachmentRoutes = require('./routes/attachments');
 const tagRoutes = require('./routes/tags');
 const webhookRoutes = require('./routes/webhooks');
 const backupRoutes = require('./routes/backup');
@@ -61,6 +62,7 @@ if (swaggerDocument) {
 // API routes (no auth required)
 app.use('/api/tasks', taskRoutes);
 app.use('/api/tasks', subtasksNotesRoutes);
+app.use('/api/tasks', attachmentRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/backup', backupRoutes);

@@ -4,6 +4,7 @@ const { validateTaskInput, validateBatchInput } = require('../validators/task');
 const { triggerWebhook } = require('../services/webhookService');
 const config = require('../config');
 const { dateInTimeZone } = require('../utils/date');
+const { removeAttachmentFiles } = require('../utils/attachmentStorage');
 
 const router = express.Router();
 
@@ -211,10 +212,23 @@ router.get('/', async (req, res) => {
       };
     });
 
+    const attachmentStats = taskIds.length > 0
+      ? await db('task_attachments')
+          .whereIn('task_id', taskIds)
+          .select('task_id')
+          .count('* as total')
+          .groupBy('task_id')
+      : [];
+    const attachmentCountMap = {};
+    attachmentStats.forEach((stats) => {
+      attachmentCountMap[stats.task_id] = Number(stats.total);
+    });
+
     const result = tasks.map((t) => ({
       ...t,
       tags: tagMap[t.id] || [],
       subtask_progress: subtaskStatsMap[t.id] || null,
+      attachment_count: attachmentCountMap[t.id] || 0,
     }));
 
     res.json({
@@ -387,7 +401,11 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
+    const attachments = await db('task_attachments')
+      .where({ task_id: req.params.id })
+      .select('stored_name');
     await db('tasks').where('id', req.params.id).del();
+    await removeAttachmentFiles(attachments.map((attachment) => attachment.stored_name));
     res.json({ message: 'Task deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
@@ -422,7 +440,11 @@ router.post('/batch', async (req, res) => {
         .whereIn('id', validIds)
         .update({ priority: value, updated_at: new Date().toISOString() });
     } else if (action === 'delete') {
+      const attachments = await db('task_attachments')
+        .whereIn('task_id', validIds)
+        .select('stored_name');
       affected = await db('tasks').whereIn('id', validIds).del();
+      await removeAttachmentFiles(attachments.map((attachment) => attachment.stored_name));
     }
 
     res.json({ message: `Batch ${action} completed`, affected });

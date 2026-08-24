@@ -14,6 +14,11 @@ function isLoopbackHost(host) {
   return ['127.0.0.1', '::1', 'localhost'].includes(host);
 }
 
+function parsePositiveInteger(value, defaultValue) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : defaultValue;
+}
+
 const host = process.env.HOST || '127.0.0.1';
 const privateWebhookDefault = isLoopbackHost(host);
 
@@ -23,6 +28,9 @@ const config = {
   host,
   nodeEnv: process.env.NODE_ENV || 'development',
   dbPath: process.env.DB_PATH || path.join(__dirname, '..', 'data', 'tasks.db'),
+  attachmentDir: process.env.ATTACHMENT_DIR || path.join(__dirname, '..', 'data', 'attachments'),
+  attachmentMaxBytes: parsePositiveInteger(process.env.ATTACHMENT_MAX_SIZE_MB, 20) * 1024 * 1024,
+  backupMaxBytes: parsePositiveInteger(process.env.BACKUP_MAX_SIZE_MB, 1024) * 1024 * 1024,
   appTimezone: process.env.APP_TIMEZONE || 'Asia/Shanghai',
   corsOrigins: parseList(process.env.CORS_ORIGIN),
   apiToken: process.env.API_TOKEN ? process.env.API_TOKEN.trim() : '',

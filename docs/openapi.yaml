@@ -83,6 +83,9 @@ components:
           properties:
             total: { type: integer, minimum: 0 }
             completed: { type: integer, minimum: 0 }
+        attachment_count:
+          type: integer
+          minimum: 0
 
     Subtask:
       type: object
@@ -93,6 +96,19 @@ components:
         completed: { type: boolean }
         sort_order: { type: integer }
         created_at: { type: string, format: date-time }
+
+    Attachment:
+      type: object
+      properties:
+        id: { type: integer }
+        task_id: { type: integer }
+        original_name: { type: string }
+        mime_type: { type: string }
+        size: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        created_at: { type: string, format: date-time }
+        download_url: { type: string }
+        preview_url: { type: string, nullable: true }
 
     TaskNote:
       type: object
@@ -582,6 +598,106 @@ paths:
       responses:
         '200': { description: 删除成功 }
 
+  /api/tasks/{taskId}/attachments:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      summary: 获取任务附件
+      tags: [Attachments]
+      responses:
+        '200':
+          description: 附件元数据列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Attachment' }
+        '404': { description: 任务不存在 }
+    post:
+      summary: 上传任务附件
+      description: 单文件大小由 ATTACHMENT_MAX_SIZE_MB 控制，默认 20 MB。
+      tags: [Attachments]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: 上传成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+        '400': { description: 文件缺失、格式错误或超过大小限制 }
+        '404': { description: 任务不存在 }
+
+  /api/tasks/{taskId}/attachments/{attachmentId}:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: attachmentId
+        in: path
+        required: true
+        schema: { type: integer }
+    delete:
+      summary: 删除附件
+      tags: [Attachments]
+      responses:
+        '200': { description: 删除成功 }
+        '404': { description: 任务或附件不存在 }
+
+  /api/tasks/{taskId}/attachments/{attachmentId}/download:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: attachmentId
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      summary: 下载附件
+      tags: [Attachments]
+      responses:
+        '200':
+          description: 附件二进制内容
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404': { description: 任务、附件或文件不存在 }
+
+  /api/tasks/{taskId}/attachments/{attachmentId}/preview:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: attachmentId
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      summary: 预览安全位图附件
+      description: 仅支持 JPEG、PNG、GIF 和 WebP；SVG 等其他类型必须下载。
+      tags: [Attachments]
+      responses:
+        '200':
+          description: 图片内容
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '415': { description: 不支持安全内嵌预览 }
+
   /api/tasks/{taskId}/notes:
     parameters:
       - name: taskId
@@ -763,7 +879,7 @@ paths:
 
   /api/backup/export:
     get:
-      summary: 导出完整 JSON 备份
+      summary: 导出旧版 JSON 备份（不含附件文件）
       tags: [Backup]
       responses:
         '200':
@@ -776,12 +892,13 @@ paths:
                 properties:
                   version: { type: integer, enum: [1] }
                   timestamp: { type: string, format: date-time }
+                  attachments_omitted: { type: integer, minimum: 0 }
                   data: { type: object }
 
   /api/backup/import:
     post:
-      summary: 导入完整 JSON 备份
-      description: 在单个数据库事务中替换现有数据。
+      summary: 导入旧版 JSON 备份
+      description: 在单个数据库事务中替换现有数据；JSON 不含二进制文件，因此现有附件会被移除。
       tags: [Backup]
       requestBody:
         required: true
@@ -796,3 +913,32 @@ paths:
       responses:
         '200': { description: 导入成功 }
         '400': { description: 备份格式无效 }
+
+  /api/backup/export.zip:
+    get:
+      summary: 导出包含附件的 ZIP 完整备份
+      tags: [Backup]
+      responses:
+        '200':
+          description: AgentTODO 完整备份压缩包
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+
+  /api/backup/import.zip:
+    post:
+      summary: 恢复包含附件的 ZIP 完整备份
+      description: 校验清单、文件大小和 SHA-256 后，替换数据库与附件目录。
+      tags: [Backup]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [backup]
+              properties:
+                backup: { type: string, format: binary }
+      responses:
+        '200': { description: 完整恢复成功 }
+        '400': { description: 压缩包、清单或附件校验失败 }
