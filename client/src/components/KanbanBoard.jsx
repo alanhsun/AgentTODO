@@ -7,12 +7,9 @@ const COLUMNS = [
   { key: 'done', label: '已完成', icon: '●', color: 'var(--success)' },
 ];
 
-export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, selectedIds }) {
-  const grouped = {
-    todo: tasks.filter((t) => t.status === 'todo'),
-    in_progress: tasks.filter((t) => t.status === 'in_progress'),
-    done: tasks.filter((t) => t.status === 'done'),
-  };
+export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, selectedIds, onSubtaskChange }) {
+  const grouped = { todo: [], in_progress: [], done: [] };
+  tasks.forEach((t) => { if (grouped[t.status]) grouped[t.status].push(t); });
 
   const [dragOverCol, setDragOverCol] = useState(null);
 
@@ -29,6 +26,8 @@ export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, s
   };
 
   const handleDragLeave = (e, colKey) => {
+    // 在列内的子元素之间移动也会触发 dragleave，只有真正离开列时才取消高亮
+    if (e.currentTarget.contains(e.relatedTarget)) return;
     if (dragOverCol === colKey) {
       setDragOverCol(null);
     }
@@ -56,7 +55,7 @@ export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, s
             <span className="kanban-col-title">{col.label}</span>
             <span className="kanban-col-count">{grouped[col.key].length}</span>
           </div>
-          <div 
+          <div
             className={`kanban-column-body ${dragOverCol === col.key ? 'drag-over' : ''}`}
             onDragOver={(e) => handleDragOver(e, col.key)}
             onDragLeave={(e) => handleDragLeave(e, col.key)}
@@ -73,6 +72,7 @@ export default function KanbanBoard({ tasks, onEdit, onStatusChange, onSelect, s
                 onStatusChange={onStatusChange}
                 onSelect={onSelect}
                 selected={selectedIds.includes(task.id)}
+                onSubtaskChange={onSubtaskChange}
                 draggable
                 onDragStart={(e) => handleDragStart(e, task.id)}
               />

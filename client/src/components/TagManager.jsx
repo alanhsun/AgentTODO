@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { tagsApi } from '../api';
 
 const PRESET_COLORS = [
-  '#6366f1', '#8b5cf6', '#ec4899', '#ef4444',
-  '#f97316', '#eab308', '#22c55e', '#14b8a6',
-  '#06b6d4', '#3b82f6', '#64748b', '#a855f7',
+  '#1B365D', '#2D5A8A', '#134857', '#1c3a29',
+  '#2b3326', '#8b4513', '#5a1f17', '#3a2a20',
+  '#5e3c58', '#6b6a64', '#3d3d3a', '#8c6239',
 ];
 
 export default function TagManager({ tags, onRefresh }) {

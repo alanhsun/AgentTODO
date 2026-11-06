@@ -20,9 +20,9 @@
 <!-- @features -->
 - 🤖 **AI Native CLI 技能系统**：提供专门为大语言模型优化的命令行交互模式（支持热加载），AI 可以通过标准输入输出直接操作任务大盘，摆脱复杂的网络协议配置。
 - 🔓 **本地私有化 (Zero-Auth)**：专为本地受信任网络设计，去除 JWT 用户注册与登录等繁琐流程，大模型和本地脚本直接无缝集成调用。
-- 🔄 **周期任务 & 子任务分解**：支持设置每日/每周重复习惯。AI 能够主动将宏大目标（如“旅行规划”）拆解为子步骤并持续追踪。
-- 🔔 **Webhook 主动推送支持**：内置 Node-Cron 定时任务扫描。当任务逾期时，主动向 AI 系统发送 HTTP Push 触发提醒。
-- 🎨 **双视图自由切换**：支持“列表(List)”与“看板(Kanban)”视角，并自带深/浅色模式切换。
+- 🔄 **周期任务 & 子任务分解**：支持设置每日/每周/每月重复习惯，完成后自动生成下一次任务。AI 能够主动将宏大目标（如“旅行规划”）拆解为子步骤，并在 Web 界面中实时勾选追踪。
+- 🔔 **Webhook 主动推送支持**：内置 Node-Cron 定时任务扫描。当任务逾期、创建、完成或删除时，主动向 AI 系统发送 HTTP Push 触发提醒。
+- 🎨 **三视图自由切换**：支持“列表(List)”、“看板(Kanban)”与“日历(Calendar)”视角，并自带深/浅色模式切换。
 <!-- /features -->
 
 ---
@@ -51,6 +51,8 @@ services:
       - PORT=3300
       - AGENTTODO_URL=http://localhost:3300/api
       - DB_PATH=/data/tasks.db
+      # 时区决定"今天/逾期"的判断，请按实际所在地修改
+      - TZ=Asia/Shanghai
 
 volumes:
   task-data:
@@ -106,7 +108,8 @@ npm run dev
 <!-- @output -->
 - 本地前端运行在：`http://localhost:3300` (支持热更新)
 - 后端 API 运行在：`http://localhost:3301`
-- CLI 交互终端可通过 `node server/src/cli/index.js` 启动。
+- CLI 交互终端可通过 `node server/src/cli/index.js` 启动；AI / 脚本可使用单次执行模式：`node server/src/cli/index.js run get_today_agenda`（只输出 JSON）。
+- 运行测试：`npm test`；前端代码检查：`npm run lint`。
 <!-- /output -->
 
 ---

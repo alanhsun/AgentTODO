@@ -1,105 +1,105 @@
 const express = require('express');
 const { getDb } = require('../db');
+const { asyncHandler, parseId, HttpError } = require('../utils/http');
+const { broadcastEvent } = require('../services/eventService');
 
 const router = express.Router();
 
-// GET /api/tags - List all tags
-router.get('/', async (req, res) => {
-  try {
-    const db = getDb();
-    const tags = await db('tags').orderBy('name');
+const MAX_TAG_NAME_LENGTH = 50;
+const DEFAULT_COLOR = '#6366f1';
+const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
-    const tagIds = tags.map((t) => t.id);
-    const counts = tagIds.length > 0
-      ? await db('task_tags')
-          .whereIn('tag_id', tagIds)
-          .groupBy('tag_id')
-          .select('tag_id')
-          .count('* as task_count')
-      : [];
-
-    const countMap = {};
-    counts.forEach((c) => { countMap[c.tag_id] = c.task_count; });
-
-    const result = tags.map((t) => ({
-      ...t,
-      task_count: countMap[t.id] || 0,
-    }));
-
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
+function validateName(name) {
+  if (typeof name !== 'string' || name.trim().length === 0) {
+    throw new HttpError(400, 'Tag name is required');
   }
-});
+  if (name.trim().length > MAX_TAG_NAME_LENGTH) {
+    throw new HttpError(400, `Tag name must be ${MAX_TAG_NAME_LENGTH} characters or less`);
+  }
+  return name.trim();
+}
+
+function validateColor(color) {
+  if (typeof color !== 'string' || !COLOR_RE.test(color)) {
+    throw new HttpError(400, 'color must be a hex color like #6366f1');
+  }
+  return color;
+}
+
+async function assertNameAvailable(db, name, excludeId = null) {
+  const query = db('tags').where({ name });
+  if (excludeId) query.whereNot('id', excludeId);
+  if (await query.first()) {
+    throw new HttpError(409, 'Tag already exists');
+  }
+}
+
+// GET /api/tags - List all tags with task counts
+router.get('/', asyncHandler(async (req, res) => {
+  const db = getDb();
+  const tags = await db('tags')
+    .leftJoin('task_tags', 'tags.id', 'task_tags.tag_id')
+    .select('tags.id', 'tags.name', 'tags.color')
+    .count('task_tags.task_id as task_count')
+    .groupBy('tags.id')
+    .orderBy('tags.name');
+
+  res.json(tags.map((t) => ({ ...t, task_count: Number(t.task_count) || 0 })));
+}));
 
 // POST /api/tags - Create a tag
-router.post('/', async (req, res) => {
-  try {
-    const db = getDb();
-    const { name, color } = req.body;
+router.post('/', asyncHandler(async (req, res) => {
+  const db = getDb();
+  const body = req.body || {};
+  const name = validateName(body.name);
+  const color = body.color === undefined || body.color === null || body.color === ''
+    ? DEFAULT_COLOR
+    : validateColor(body.color);
 
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return res.status(400).json({ error: 'Tag name is required' });
-    }
-
-    const existing = await db('tags').where({ name: name.trim() }).first();
-    if (existing) {
-      return res.status(409).json({ error: 'Tag already exists' });
-    }
-
-    const [id] = await db('tags').insert({
-      name: name.trim(),
-      color: color || '#6366f1',
-    });
-
-    const tag = await db('tags').where('id', id).first();
-    res.status(201).json(tag);
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  await assertNameAvailable(db, name);
+  const [id] = await db('tags').insert({ name, color });
+  const tag = await db('tags').where('id', id).first();
+  broadcastEvent('tag.created', { tagId: id });
+  res.status(201).json({ ...tag, task_count: 0 });
+}));
 
 // PUT /api/tags/:id - Update a tag
-router.put('/:id', async (req, res) => {
-  try {
-    const db = getDb();
-    const tag = await db('tags').where({ id: req.params.id }).first();
+router.put('/:id', asyncHandler(async (req, res) => {
+  const db = getDb();
+  const id = parseId(req.params.id);
+  const body = req.body || {};
+  const tag = await db('tags').where({ id }).first();
 
-    if (!tag) {
-      return res.status(404).json({ error: 'Tag not found' });
-    }
-
-    const updates = {};
-    if (req.body.name !== undefined) updates.name = req.body.name.trim();
-    if (req.body.color !== undefined) updates.color = req.body.color;
-
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: 'No valid fields to update' });
-    }
-
-    await db('tags').where('id', req.params.id).update(updates);
-    const updated = await db('tags').where('id', req.params.id).first();
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
+  if (!tag) {
+    return res.status(404).json({ error: 'Tag not found' });
   }
-});
 
-// DELETE /api/tags/:id - Delete a tag
-router.delete('/:id', async (req, res) => {
-  try {
-    const db = getDb();
-    const tag = await db('tags').where({ id: req.params.id }).first();
+  const updates = {};
+  if (body.name !== undefined) updates.name = validateName(body.name);
+  if (body.color !== undefined) updates.color = validateColor(body.color);
 
-    if (!tag) {
-      return res.status(404).json({ error: 'Tag not found' });
-    }
-
-    await db('tags').where('id', req.params.id).del();
-    res.json({ message: 'Tag deleted successfully' });
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
+  if (Object.keys(updates).length === 0) {
+    throw new HttpError(400, 'No valid fields to update');
   }
-});
+  if (updates.name) await assertNameAvailable(db, updates.name, id);
+
+  await db('tags').where('id', id).update(updates);
+  const updated = await db('tags').where('id', id).first();
+  broadcastEvent('tag.updated', { tagId: id });
+  res.json(updated);
+}));
+
+// DELETE /api/tags/:id - Delete a tag (task links cascade)
+router.delete('/:id', asyncHandler(async (req, res) => {
+  const db = getDb();
+  const id = parseId(req.params.id);
+  const deleted = await db('tags').where('id', id).del();
+
+  if (!deleted) {
+    return res.status(404).json({ error: 'Tag not found' });
+  }
+  broadcastEvent('tag.deleted', { tagId: id });
+  res.json({ message: 'Tag deleted successfully' });
+}));
 
 module.exports = router;

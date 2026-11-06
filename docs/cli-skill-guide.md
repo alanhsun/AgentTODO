@@ -23,6 +23,11 @@
 
 ## 2. 如何运行 CLI
 
+CLI 通过 HTTP 调用后端服务，默认地址为 `http://localhost:3301/api`（本地开发）。
+Docker 部署时请设置环境变量 `AGENTTODO_URL=http://localhost:3300/api`（容器内已默认设置）。
+
+### 2.1 交互模式（适合人工调试）
+
 在项目根目录下，打开终端运行：
 ```bash
 node server/src/cli/index.js
@@ -30,12 +35,48 @@ node server/src/cli/index.js
 
 你将看到一个 `AgentTODO>` 提示符。你可以输入以下命令：
 - `help`：查看所有命令
+- `help <技能名称>`：查看某个技能的参数说明
 - `list`：列出当前所有的可用技能
 - `run <技能名称> [JSON参数]`：执行某个技能。比如：
   `run ping`
   `run create_task {"title":"写报告", "priority":"high"}`
 - `reload`：热加载技能（**超级好用！修改了代码不需要重启程序，直接输入 reload 就能生效**）
 - `exit`：退出程序
+
+### 2.2 单次执行模式（适合 AI 助手 / 脚本调用）
+
+带参数运行时 CLI 只执行一次：标准输出**只包含 JSON 结果**，失败时进程退出码为 `1`，非常适合让 AI 通过 Shell 工具直接调用：
+
+```bash
+# 以 JSON 列出全部技能及参数说明（可直接作为 AI 的工具清单）
+node server/src/cli/index.js list
+
+# 执行技能
+node server/src/cli/index.js run get_today_agenda
+node server/src/cli/index.js run search_tasks '{"search":"报告","status":"todo,in_progress"}'
+
+# Windows / 复杂 JSON 引号不好处理时，用 "-" 从标准输入读取参数
+echo {"title":"写报告","subtasks":["收集数据","撰写初稿"]} | node server/src/cli/index.js run create_task -
+```
+
+失败时输出示例（会带上后端给出的具体原因，方便 AI 自我修正）：
+```json
+{ "status": "error", "skill": "create_task", "http_status": 400, "message": "Priority must be one of: low, medium, high, urgent" }
+```
+
+### 2.3 内置技能一览
+
+| 技能 | 作用 |
+|------|------|
+| `get_daily_summary` | 全局统计（总数、逾期、今日到期、今日完成） |
+| `get_today_agenda` | 今日到期 + 逾期任务，含子任务列表与 ID |
+| `search_tasks` | 按关键词 / 状态 / 优先级 / 标签 / 日期搜索任务，用于定位任务 ID |
+| `get_task` | 单个任务详情（子任务、进展笔记） |
+| `get_user_tags` | 全部标签 |
+| `create_task` | 创建任务 / 周期习惯，可一次性带子任务 |
+| `update_task` | 更新标题、描述、状态、优先级、日期、重复规则、标签 |
+| `add_task_progress_note` | 记录进展笔记，并可勾选子任务、更新任务状态 |
+| `ping` | 连通性测试 |
 
 ---
 
@@ -49,12 +90,14 @@ node server/src/cli/index.js
 ```javascript
 const BaseSkill = require('../BaseSkill');
 const axios = require('axios'); // 如果需要发请求
+const { BASE_URL, REQUEST_OPTIONS } = require('../config'); // 共享的服务地址与超时配置
 
 class DeleteTaskSkill extends BaseSkill {
   constructor() {
     super();
     this.name = 'delete_task'; // 技能的名字（执行时敲的命令）
     this.description = '删除指定的任务。'; // 技能的说明
+    this.parameters = { task_id: '必填，任务 ID' }; // 参数说明，会出现在 help / list 输出中
   }
   
   // 后面写具体的逻辑...
@@ -82,10 +125,10 @@ module.exports = DeleteTaskSkill;
   async execute(args) {
     try {
       // 发送 HTTP 请求去删除任务
-      const res = await axios.delete(`http://localhost:3300/api/tasks/${args.task_id}`);
+      await axios.delete(`${BASE_URL}/tasks/${args.task_id}`, REQUEST_OPTIONS);
       return { message: "任务删除成功" };
     } catch (error) {
-      // 遇到报错，交给基类统一处理
+      // 遇到报错，交给基类统一处理（会自动提取后端返回的错误原因和 HTTP 状态码）
       return this.handleError(error);
     }
   }
@@ -104,13 +147,13 @@ reload
 
 为了保证代码靠谱，我们使用了 `Jest` 框架。测试代码存放在 `server/src/cli/__tests__/` 目录下。
 
-运行测试命令：
+运行测试命令（在项目根目录）：
 ```bash
-cd server
-npm run test server/src/cli/__tests__
+npm test
 ```
 
-我们在写测试时，会用一个叫 `jest.mock` 的技术，**假装**发了网络请求（模拟），这样即使没开服务器也能测试代码逻辑对不对。详细可以参考 `create_task.test.js` 文件中的中文注释。
+我们在写测试时，会用一个叫 `jest.mock` 的技术，**假装**发了网络请求（模拟），这样即使没开服务器也能测试代码逻辑对不对。详细可以参考 `create_task.test.js` 与 `skills.test.js` 文件中的中文注释。
+后端 REST API 的集成测试位于 `server/src/__tests__/api.test.js`，使用内存 SQLite 数据库运行。
 
 ---
 

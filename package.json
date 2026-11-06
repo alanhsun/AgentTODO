@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "AI 驱动的极简本地任务系统 - AgentTODO",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "server",
     "client"
@@ -12,7 +15,10 @@
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
     "start": "cd server && npm start",
+    "build": "npm run build:client",
     "build:client": "cd client && npm run build",
+    "lint": "cd client && npm run lint",
+    "cli": "node server/src/cli/index.js",
     "test": "cd server && npm test",
     "test:coverage": "cd server && npm run test:coverage"
   },

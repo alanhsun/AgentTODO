@@ -31,12 +31,12 @@
 ## 阶段二：给 AI 安装“机械手臂”（添加工具插件） 🦾
 
 <!-- @purpose -->
-为 AI 助手配置 6 个核心的 REST API 技能，使其能够实际读写 AgentTODO 系统数据。
+为 AI 助手配置 8 个核心的 REST API 技能，使其能够实际读写 AgentTODO 系统数据。
 <!-- /purpose -->
 
 > **说明**：AgentTODO 已全面重构为**免认证 (Zero-Auth)** 架构，AI 直接发起 HTTP 请求即可。
 
-请在 AI 的 **工具配置 / 插件管理** 界面，逐一添加以下 6 个 API 技能：
+请在 AI 的 **工具配置 / 插件管理** 界面，逐一添加以下 8 个 API 技能：
 
 <!-- @input -->
 ### 技能 1：获取每日概览 (get_daily_summary)
@@ -87,6 +87,18 @@
 - **名称**: `add_task_progress_note`
 - **描述**: 记录执行进展日志，或标记某个子任务状态为完成。
 - **URL**: `http://localhost:3300/api/tasks/{{task_id}}/notes` (注：对于无法组合请求的 AI 客户端，建议使用开发者提供的 Python 包装脚本或 CLI 技能通道)
+
+### 技能 7：搜索任务 (search_tasks)
+- **名称**: `search_tasks`
+- **描述**: 按关键词 / 状态 / 优先级 / 标签搜索任务。当用户提到某个任务但 AI 不知道其 ID 时先调用。
+- **URL**: `http://localhost:3300/api/tasks?search={{keyword}}&status={{status}}&limit=20`
+- **Method**: `GET`
+
+### 技能 8：查看任务详情 (get_task)
+- **名称**: `get_task`
+- **描述**: 获取单个任务的子任务列表（含子任务 ID）与历史进展笔记，便于勾选子任务。
+- **URL**: `http://localhost:3300/api/tasks/{{task_id}}`
+- **Method**: `GET`
 <!-- /input -->
 
 ---

@@ -7,6 +7,8 @@ class BaseSkill {
   constructor() {
     this.name = 'base_skill';
     this.description = '这是一个基础技能';
+    // 参数说明（可选）：{ 参数名: '说明' }，用于 `help <skill>` 和 `list --json` 输出，方便 AI 了解如何调用
+    this.parameters = {};
   }
 
   /**
@@ -29,15 +31,34 @@ class BaseSkill {
 
   /**
    * 错误处理：当技能执行失败时，统一的错误格式化。
+   * 如果是后端返回的 HTTP 错误，会把状态码和后端给出的具体原因一并带上，
+   * 这样 AI 能知道是"参数不对"还是"任务不存在"，从而自我修正。
    * @param {Error} error - 捕获到的错误
    * @returns {Object} 格式化后的错误信息
    */
   handleError(error) {
-    return {
+    const result = {
       status: 'error',
       skill: this.name,
-      message: error.message || '未知错误',
+      message: (error && error.message) || '未知错误',
     };
+
+    const response = error && error.response;
+    if (response) {
+      result.http_status = response.status;
+      const data = response.data;
+      if (data && typeof data === 'object') {
+        if (data.error) result.message = data.error;
+        if (Array.isArray(data.errors)) {
+          result.message = data.errors.join('; ');
+          result.details = data.errors;
+        }
+      }
+    } else if (error && (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND')) {
+      result.message = `无法连接到 AgentTODO 服务 (${error.code})，请确认服务已启动并检查 AGENTTODO_URL 环境变量`;
+    }
+
+    return result;
   }
 }
 

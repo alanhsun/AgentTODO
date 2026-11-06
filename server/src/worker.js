@@ -1,36 +1,59 @@
 const cron = require('node-cron');
+const config = require('./config');
 const { getDb } = require('./db');
 const { triggerWebhook } = require('./services/webhookService');
+const { today: localToday } = require('./utils/date');
+
+let overdueJob = null;
+
+/** 查询逾期任务并推送 task.overdue 事件；导出以便测试和手动触发 */
+async function checkOverdueTasks() {
+  const db = getDb();
+  const today = localToday();
+
+  const overdueTasks = await db('tasks')
+    .select('id', 'title', 'priority', 'status', 'due_date')
+    .where('status', '!=', 'done')
+    .whereNotNull('due_date')
+    .where('due_date', '<', today)
+    .orderBy('due_date', 'asc');
+
+  if (overdueTasks.length > 0) {
+    console.log(`[CronWorker] Found ${overdueTasks.length} overdue tasks.`);
+    // 推送给 AI: "老板，你昨天有些任务没做完！"
+    triggerWebhook('task.overdue', {
+      date: today,
+      count: overdueTasks.length,
+      tasks: overdueTasks,
+    });
+  }
+  return overdueTasks;
+}
 
 function initWorkers() {
-  console.log('Webhook worker initialized: listening for overdue tasks');
+  if (!cron.validate(config.overdueCron)) {
+    console.error(`[CronWorker] Invalid OVERDUE_CRON expression "${config.overdueCron}", overdue checks disabled.`);
+    return;
+  }
 
-  // 每天早上 9:00 (也可以改成每小时 0 * * * *) 检查一次过期任务
-  cron.schedule('0 9 * * *', async () => {
+  // 默认每天早上 9:00（服务器本地时区，可通过 TZ 环境变量设置）检查一次过期任务
+  overdueJob = cron.schedule(config.overdueCron, async () => {
     try {
       console.log('[CronWorker] Running overdue task check...');
-      const db = getDb();
-      const today = new Date().toISOString().split('T')[0];
-
-      const overdueTasks = await db('tasks')
-        .where('status', '!=', 'done')
-        .whereNotNull('due_date')
-        .where('due_date', '<', today);
-
-      if (overdueTasks.length > 0) {
-        console.log(`[CronWorker] Found ${overdueTasks.length} overdue tasks.`);
-        // 推送给 AI: "老板，你昨天有些任务没做完！"
-        triggerWebhook('task.overdue', {
-          count: overdueTasks.length,
-          tasks: overdueTasks
-        });
-      }
+      await checkOverdueTasks();
     } catch (e) {
       console.error('[CronWorker] Error:', e.message);
     }
   });
 
-  // 每5分钟检查是否有将于 1 小时内到期的任务 (假设增加 due_time 字段或高频扫描，这里仅示范全盘扫描不频繁)
+  console.log(`Webhook worker initialized: overdue check scheduled at "${config.overdueCron}"`);
 }
 
-module.exports = { initWorkers };
+function stopWorkers() {
+  if (overdueJob) {
+    overdueJob.stop();
+    overdueJob = null;
+  }
+}
+
+module.exports = { initWorkers, stopWorkers, checkOverdueTasks };

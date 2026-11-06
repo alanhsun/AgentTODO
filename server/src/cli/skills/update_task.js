@@ -1,8 +1,9 @@
 const BaseSkill = require('../BaseSkill');
 const axios = require('axios');
+const { BASE_URL, REQUEST_OPTIONS } = require('../config');
 
-// 为什么需要 BASE_URL？因为这是后端服务的主机地址。
-const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
+// 允许更新的字段；传 null 可清空 due_date / recurrence_end
+const UPDATABLE_FIELDS = ['title', 'description', 'status', 'priority', 'due_date', 'recurrence', 'recurrence_end', 'tags'];
 
 /**
  * 更新任务技能 (UpdateTaskSkill)
@@ -13,7 +14,18 @@ class UpdateTaskSkill extends BaseSkill {
   constructor() {
     super();
     this.name = 'update_task'; // 命令行调用的名字
-    this.description = '更新已有任务的属性（如标题、优先级、重复频率、截止日期）。';
+    this.description = '更新已有任务的属性（如标题、描述、状态、优先级、重复频率、截止日期、标签）。';
+    this.parameters = {
+      task_id: '必填，任务 ID',
+      title: '可选，新标题',
+      description: '可选，新描述',
+      status: '可选，todo | in_progress | done',
+      priority: '可选，low | medium | high | urgent',
+      due_date: '可选，YYYY-MM-DD；传 null 清空',
+      recurrence: '可选，none | daily | weekly | monthly',
+      recurrence_end: '可选，YYYY-MM-DD；传 null 清空',
+      tags: '可选，标签 ID 数组（会整体替换原有标签）',
+    };
   }
 
   /**
@@ -32,13 +44,11 @@ class UpdateTaskSkill extends BaseSkill {
    */
   async execute(args) {
     try {
-      // 1. 把所有需要改的字段塞进 payload 里
+      // 1. 把所有需要改的字段塞进 payload 里（显式传入 null 也算，用于清空日期）
       const payload = {};
-      if (args.title) payload.title = args.title;
-      if (args.priority) payload.priority = args.priority;
-      if (args.due_date) payload.due_date = args.due_date;
-      if (args.recurrence) payload.recurrence = args.recurrence;
-      if (args.tags) payload.tags = args.tags;
+      for (const field of UPDATABLE_FIELDS) {
+        if (args[field] !== undefined) payload[field] = args[field];
+      }
 
       // 如果一个属性都没填，直接拦下来，避免浪费一次网络请求
       if (Object.keys(payload).length === 0) {
@@ -46,8 +56,8 @@ class UpdateTaskSkill extends BaseSkill {
       }
 
       // 2. 发起 PUT 请求，把新的内容告诉后端
-      const res = await axios.put(`${BASE_URL}/tasks/${args.task_id}`, payload);
-      
+      const res = await axios.put(`${BASE_URL}/tasks/${args.task_id}`, payload, REQUEST_OPTIONS);
+
       // 3. 把结果返回给你看
       return { message: "任务更新成功", data: res.data };
     } catch (error) {

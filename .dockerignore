@@ -6,6 +6,7 @@ coverage/
 *.db-journal
 .env
 .git/
+.github/
 .gitignore
 *.log
 .DS_Store
@@ -16,3 +17,6 @@ client/dist/
 server/coverage/
 server/data/
 server/tests/
+**/__tests__/
+ai-integration/
+docs/assets/

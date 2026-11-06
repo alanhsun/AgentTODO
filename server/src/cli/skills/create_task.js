@@ -1,8 +1,6 @@
 const BaseSkill = require('../BaseSkill');
 const axios = require('axios');
-
-// 为什么需要 BASE_URL？因为我们的 CLI 相当于一个遥控器，它需要知道服务器（主机）的具体地址才能发指令。
-const BASE_URL = process.env.AGENTTODO_URL || 'http://localhost:3301/api';
+const { BASE_URL, REQUEST_OPTIONS } = require('../config');
 
 /**
  * 创建任务技能 (CreateTaskSkill)
@@ -13,6 +11,16 @@ class CreateTaskSkill extends BaseSkill {
     super();
     this.name = 'create_task'; // 这是你在命令行里敲的命令名字
     this.description = '创建一个新任务或周期性习惯。';
+    this.parameters = {
+      title: '必填，任务标题',
+      description: '可选，任务描述',
+      priority: '可选，low | medium | high | urgent，默认 medium',
+      due_date: '可选，截止日期 YYYY-MM-DD',
+      recurrence: '可选，none | daily | weekly | monthly，默认 none',
+      recurrence_end: '可选，重复截止日期 YYYY-MM-DD',
+      subtasks: '可选，子任务标题数组，如 ["第一步","第二步"]',
+      tags: '可选，已有标签 ID 数组（先用 get_user_tags 查询）',
+    };
   }
 
   /**
@@ -39,15 +47,17 @@ class CreateTaskSkill extends BaseSkill {
         priority: args.priority || 'medium', // 默认优先级是中等
         recurrence: args.recurrence || 'none', // 默认不重复
       };
-      
+
       // 如果有其他可选参数（比如截止日期、子任务），也一并塞进包裹里
+      if (args.description) payload.description = args.description;
       if (args.due_date) payload.due_date = args.due_date;
+      if (args.recurrence_end) payload.recurrence_end = args.recurrence_end;
       if (args.subtasks) payload.subtasks = args.subtasks;
       if (args.tags) payload.tags = args.tags;
 
       // 2. 为什么用 axios？它像是一个可靠的快递员，帮我们把包裹发给后端的 /tasks 接口。
-      const res = await axios.post(`${BASE_URL}/tasks`, payload);
-      
+      const res = await axios.post(`${BASE_URL}/tasks`, payload, REQUEST_OPTIONS);
+
       // 3. 返回成功的结果给命令行界面
       return { message: "任务创建成功", data: res.data };
     } catch (error) {

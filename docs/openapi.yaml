@@ -3,14 +3,58 @@ info:
   title: AgentTODO API
   description: >
     <!-- @purpose -->AI 驱动的任务系统 RESTful API，专为本地私有化 (Zero-Auth) 环境设计，无缝对接 AI 助手和命令行技能系统。<!-- /purpose -->
-  version: 1.0.0
+  version: 1.1.0
   contact:
     name: AgentTODO
 servers:
   - url: http://localhost:3300
     description: 本地开发
 
+tags:
+  - name: AI
+    description: 面向 AI 助手的聚合查询
+  - name: Tasks
+  - name: Subtasks
+  - name: Notes
+  - name: Tags
+  - name: Webhooks
+  - name: System
+
 components:
+  parameters:
+    TaskId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    TaskIdForChildren:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: integer
+    ChildId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  responses:
+    BadRequest:
+      description: 参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
   schemas:
     Tag:
       type: object
@@ -23,6 +67,48 @@ components:
           type: string
         task_count:
           type: integer
+
+    SubtaskProgress:
+      type: object
+      nullable: true
+      properties:
+        total:
+          type: integer
+        completed:
+          type: integer
+
+    Subtask:
+      type: object
+      properties:
+        id:
+          type: integer
+        task_id:
+          type: integer
+        title:
+          type: string
+        completed:
+          type: boolean
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    Note:
+      type: object
+      properties:
+        id:
+          type: integer
+        task_id:
+          type: integer
+        content:
+          type: string
+        source:
+          type: string
+          example: ai
+        created_at:
+          type: string
+          format: date-time
 
     Task:
       type: object
@@ -43,6 +129,17 @@ components:
           type: string
           format: date
           nullable: true
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
+        recurrence_end:
+          type: string
+          format: date
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -53,6 +150,31 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Tag'
+        subtask_progress:
+          $ref: '#/components/schemas/SubtaskProgress'
+
+    TaskDetail:
+      allOf:
+        - $ref: '#/components/schemas/Task'
+        - type: object
+          properties:
+            subtasks:
+              type: array
+              items:
+                $ref: '#/components/schemas/Subtask'
+            notes:
+              type: array
+              items:
+                $ref: '#/components/schemas/Note'
+            next_occurrence:
+              type: object
+              description: 仅在周期任务被标记完成时出现，表示自动生成的下一次实例
+              properties:
+                id:
+                  type: integer
+                due_date:
+                  type: string
+                  format: date
 
     TaskCreateInput:
       type: object
@@ -75,10 +197,22 @@ components:
           type: string
           format: date
           nullable: true
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
+          default: none
+        recurrence_end:
+          type: string
+          format: date
+          nullable: true
         tags:
           type: array
           items:
             type: integer
+        subtasks:
+          type: array
+          items:
+            type: string
 
     TaskUpdateInput:
       type: object
@@ -98,8 +232,16 @@ components:
           type: string
           format: date
           nullable: true
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
+        recurrence_end:
+          type: string
+          format: date
+          nullable: true
         tags:
           type: array
+          description: 整体替换任务的标签
           items:
             type: integer
 
@@ -119,6 +261,26 @@ components:
           type: string
           description: 新的状态或优先级值（action为delete时不需要）
 
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+            enum: [task.created, task.updated, task.completed, task.deleted, task.overdue, '*']
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
     Pagination:
       type: object
       properties:
@@ -136,6 +298,10 @@ components:
       properties:
         error:
           type: string
+        errors:
+          type: array
+          items:
+            type: string
 
 paths:
   /api/health:
@@ -157,6 +323,95 @@ paths:
                     type: string
                     format: date-time
 
+  /api/tasks/summary:
+    get:
+      summary: 全局任务统计（服务器本地时区）
+      tags: [AI]
+      responses:
+        '200':
+          description: 统计信息
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  by_status:
+                    type: object
+                    properties:
+                      todo:
+                        type: integer
+                      in_progress:
+                        type: integer
+                      done:
+                        type: integer
+                  overdue:
+                    type: integer
+                  due_today:
+                    type: integer
+                  completed_today:
+                    type: integer
+                  by_priority:
+                    type: object
+                    properties:
+                      urgent:
+                        type: integer
+                      high:
+                        type: integer
+                  date:
+                    type: string
+                    format: date
+
+  /api/tasks/today:
+    get:
+      summary: 今日到期 + 逾期的未完成任务（含子任务列表）
+      tags: [AI]
+      responses:
+        '200':
+          description: 今日议程
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  tasks:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Task'
+                        - type: object
+                          properties:
+                            is_overdue:
+                              type: boolean
+                            subtasks:
+                              type: array
+                              items:
+                                $ref: '#/components/schemas/Subtask'
+
+  /api/tasks/overdue:
+    get:
+      summary: 逾期的未完成任务
+      tags: [AI]
+      responses:
+        '200':
+          description: 逾期任务
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+
   /api/tasks:
     get:
       summary: 获取任务列表
@@ -176,7 +431,7 @@ paths:
           in: query
           schema:
             type: string
-          description: "按标签ID筛选，多个用逗号分隔"
+          description: "按标签ID筛选，多个用逗号分隔（匹配任意一个）"
         - name: search
           in: query
           schema:
@@ -187,20 +442,20 @@ paths:
           schema:
             type: string
             format: date
-          description: 截止日期早于
+          description: 截止日期不晚于
         - name: due_after
           in: query
           schema:
             type: string
             format: date
-          description: 截止日期晚于
+          description: 截止日期不早于
         - name: sort
           in: query
           schema:
             type: string
             enum: [created_at, updated_at, due_date, priority, title, status]
             default: created_at
-          description: 排序字段
+          description: 排序字段（priority 按业务优先级排序；due_date 排序时无日期的任务在最后）
         - name: order
           in: query
           schema:
@@ -219,7 +474,7 @@ paths:
           schema:
             type: integer
             default: 20
-            maximum: 100
+            maximum: 500
           description: 每页条数
       responses:
         '200':
@@ -235,6 +490,8 @@ paths:
                       $ref: '#/components/schemas/Task'
                   pagination:
                     $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
     post:
       summary: 创建任务
@@ -251,52 +508,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                $ref: '#/components/schemas/TaskDetail'
         '400':
-          description: 参数错误
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  errors:
-                    type: array
-                    items:
-                      type: string
+          $ref: '#/components/responses/BadRequest'
 
   /api/tasks/{id}:
     get:
-      summary: 获取单个任务
+      summary: 获取任务详情（含子任务与笔记）
       tags: [Tasks]
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/TaskId'
       responses:
         '200':
           description: 任务详情
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                $ref: '#/components/schemas/TaskDetail'
         '404':
-          description: 任务不存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/NotFound'
 
     put:
-      summary: 更新任务
+      summary: 更新任务（局部更新；周期任务完成时自动生成下一次实例）
       tags: [Tasks]
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/TaskId'
       requestBody:
         required: true
         content:
@@ -309,23 +545,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                $ref: '#/components/schemas/TaskDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
-          description: 任务不存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/NotFound'
 
     delete:
-      summary: 删除任务
+      summary: 删除任务（级联删除子任务、笔记、标签关联）
       tags: [Tasks]
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/TaskId'
       responses:
         '200':
           description: 删除成功
@@ -337,11 +567,7 @@ paths:
                   message:
                     type: string
         '404':
-          description: 任务不存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/NotFound'
 
   /api/tasks/batch:
     post:
@@ -365,8 +591,174 @@ paths:
                     type: string
                   affected:
                     type: integer
+                  not_found:
+                    type: array
+                    items:
+                      type: integer
+                  next_occurrences:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        due_date:
+                          type: string
+                          format: date
         '400':
-          description: 参数错误
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tasks/{taskId}/subtasks:
+    get:
+      summary: 获取子任务列表
+      tags: [Subtasks]
+      parameters:
+        - $ref: '#/components/parameters/TaskIdForChildren'
+      responses:
+        '200':
+          description: 子任务列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subtask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: 添加子任务
+      tags: [Subtasks]
+      parameters:
+        - $ref: '#/components/parameters/TaskIdForChildren'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  maxLength: 255
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subtask'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tasks/{taskId}/subtasks/{id}:
+    put:
+      summary: 更新子任务（勾选 / 改名 / 排序）
+      tags: [Subtasks]
+      parameters:
+        - $ref: '#/components/parameters/TaskIdForChildren'
+        - $ref: '#/components/parameters/ChildId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                completed:
+                  type: boolean
+                sort_order:
+                  type: integer
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subtask'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: 删除子任务
+      tags: [Subtasks]
+      parameters:
+        - $ref: '#/components/parameters/TaskIdForChildren'
+        - $ref: '#/components/parameters/ChildId'
+      responses:
+        '200':
+          description: 删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tasks/{taskId}/notes:
+    get:
+      summary: 获取进展笔记（时间倒序）
+      tags: [Notes]
+      parameters:
+        - $ref: '#/components/parameters/TaskIdForChildren'
+      responses:
+        '200':
+          description: 笔记列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Note'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: 添加进展笔记
+      tags: [Notes]
+      parameters:
+        - $ref: '#/components/parameters/TaskIdForChildren'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                source:
+                  type: string
+                  maxLength: 50
+                  default: user
+                  example: ai
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tasks/{taskId}/notes/{id}:
+    delete:
+      summary: 删除进展笔记
+      tags: [Notes]
+      parameters:
+        - $ref: '#/components/parameters/TaskIdForChildren'
+        - $ref: '#/components/parameters/ChildId'
+      responses:
+        '200':
+          description: 删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/tags:
     get:
@@ -407,6 +799,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Tag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '409':
           description: 标签名已存在
 
@@ -415,11 +809,7 @@ paths:
       summary: 更新标签
       tags: [Tags]
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/ChildId'
       requestBody:
         required: true
         content:
@@ -429,8 +819,10 @@ paths:
               properties:
                 name:
                   type: string
+                  maxLength: 50
                 color:
                   type: string
+                  pattern: '^#[0-9a-fA-F]{6}$'
       responses:
         '200':
           description: 更新成功
@@ -438,20 +830,166 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Tag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
-          description: 标签不存在
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 标签名已存在
 
     delete:
-      summary: 删除标签
+      summary: 删除标签（同时移除任务上的关联）
       tags: [Tags]
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/ChildId'
       responses:
         '200':
           description: 删除成功
         '404':
-          description: 标签不存在
+          $ref: '#/components/responses/NotFound'
+
+  /api/webhooks:
+    get:
+      summary: 获取 Webhook 列表
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Webhook 列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+    post:
+      summary: 注册 Webhook
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url]
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                url:
+                  type: string
+                  format: uri
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [task.created, task.updated, task.completed, task.deleted, task.overdue, '*']
+                  default: [task.created, task.updated, task.overdue]
+                is_active:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/webhooks/{id}:
+    put:
+      summary: 更新 Webhook
+      tags: [Webhooks]
+      parameters:
+        - $ref: '#/components/parameters/ChildId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                url:
+                  type: string
+                  format: uri
+                events:
+                  type: array
+                  items:
+                    type: string
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: 删除 Webhook
+      tags: [Webhooks]
+      parameters:
+        - $ref: '#/components/parameters/ChildId'
+      responses:
+        '200':
+          description: 删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/backup/export:
+    get:
+      summary: 导出全部数据
+      tags: [System]
+      responses:
+        '200':
+          description: 备份 JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: integer
+                  timestamp:
+                    type: string
+                    format: date-time
+                  data:
+                    type: object
+
+  /api/backup/import:
+    post:
+      summary: 导入备份（覆盖全部数据，事务执行）
+      tags: [System]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+      responses:
+        '200':
+          description: 导入成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  imported:
+                    type: object
+                    additionalProperties:
+                      type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'

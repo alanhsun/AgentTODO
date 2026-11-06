@@ -1,31 +1,69 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { tasksApi, backupApi } from '../api';
-import { useTasks, useTags, useTaskSummary } from '../hooks/useTasks';
+import { useTasks, useTags, useTaskSummary, useTodayAgenda } from '../hooks/useTasks';
 import TaskCard from '../components/TaskCard';
 import TaskForm from '../components/TaskForm';
 import FilterBar from '../components/FilterBar';
 import TagManager from '../components/TagManager';
 import KanbanBoard from '../components/KanbanBoard';
 import CalendarBoard from '../components/CalendarBoard';
+import TodayAgenda from '../components/TodayAgenda';
+
+// 看板 / 日历视图需要一次性展示尽可能多的任务（后端单页上限 500）
+const BOARD_LIMIT = 500;
+
+const STATUS_NAV = [
+  { value: '__today__', label: '今日台账', icon: '☀', countKey: 'today_focus' },
+  { value: '', label: '全部任务', icon: '◇', countKey: 'total' },
+  { value: 'todo', label: '待办', icon: '○', countKey: 'todo' },
+  { value: 'in_progress', label: '进行中', icon: '◐', countKey: 'in_progress' },
+  { value: 'done', label: '已完成', icon: '●', countKey: 'done' },
+];
 
 export default function Dashboard() {
   const [filters, setFilters] = useState({ sort: 'created_at', order: 'desc', page: 1, limit: 20 });
-  const { tasks, pagination, loading, refetch } = useTasks(filters);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban' | 'calendar'
+  const isBoardMode = viewMode === 'kanban' || viewMode === 'calendar';
+  const activeStatus = filters.status || '';
+  const isTodayMode = viewMode === 'list' && activeStatus === '__today__';
+
+  const listFilters = useMemo(() => {
+    if (viewMode !== 'list' || activeStatus === '__today__') return null;
+    return filters;
+  }, [viewMode, activeStatus, filters]);
+
+  const { tasks, pagination, loading, refetch } = useTasks(listFilters);
   const { summary, refetch: refetchSummary } = useTaskSummary();
   const { tags, refetch: refetchTags } = useTags();
+  const { agenda, loading: agendaLoading, refetch: refetchAgenda } = useTodayAgenda(true);
+
+  // 看板 / 日历：沿用搜索、优先级、标签、排序筛选，但忽略状态（由列决定）并始终从第一页取
+  const boardFilters = useMemo(() => ({
+    sort: filters.sort,
+    order: filters.order,
+    search: filters.search,
+    priority: filters.priority,
+    tag: filters.tag,
+    page: 1,
+    limit: BOARD_LIMIT,
+  }), [filters.sort, filters.order, filters.search, filters.priority, filters.tag]);
+  const { tasks: boardTasks, pagination: boardPagination, loading: boardLoading, refetch: boardRefetch } =
+    useTasks(isBoardMode ? boardFilters : null);
+
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showTags, setShowTags] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'kanban'
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState(() => localStorage.getItem('kami_theme') || 'light');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [liveVersion, setLiveVersion] = useState(0);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    localStorage.setItem('kami_theme', theme);
   }, [theme]);
 
   useEffect(() => {
@@ -40,25 +78,91 @@ export default function Dashboard() {
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
-  // For kanban and calendar view, fetch more tasks with no status filter
-  const kanbanFilters = { ...filters, limit: 100, status: '' };
-  const { tasks: kanbanTasks, loading: kanbanLoading, refetch: kanbanRefetch } = useTasks(
-    viewMode === 'kanban' || viewMode === 'calendar' ? kanbanFilters : null
-  );
+  /**
+   * 任何数据变更后统一刷新统计、标签计数、今日台账以及列表 / 看板视图。
+   * 当前未激活的视图只会递增版本号，不会真正发请求，切换回来时自动拉取最新数据。
+   */
+  const refreshAll = useCallback(() => {
+    refetch();
+    boardRefetch();
+    refetchSummary();
+    refetchTags();
+    refetchAgenda();
+  }, [boardRefetch, refetch, refetchAgenda, refetchSummary, refetchTags]);
+
+  // AI 助手可能在后台通过 API / CLI 修改任务：窗口重新获得焦点时自动同步
+  useEffect(() => {
+    window.addEventListener('focus', refreshAll);
+    return () => window.removeEventListener('focus', refreshAll);
+  }, [refreshAll]);
+
+  // SSE 实时推送：后端任何任务 / 子任务 / 笔记 / 标签变更时立即无感刷新
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.EventSource === 'undefined') {
+      return undefined;
+    }
+    const es = new window.EventSource('/api/events');
+    let debounceTimer = null;
+
+    es.onopen = () => setSseConnected(true);
+    es.onerror = () => setSseConnected(false);
+    es.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'connected') {
+          setSseConnected(true);
+          return;
+        }
+      } catch {
+        // ignore malformed frame
+      }
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        refreshAll();
+        setLiveVersion((v) => v + 1);
+      }, 80);
+    };
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      es.close();
+    };
+  }, [refreshAll]);
+
+  const switchView = (mode) => {
+    if (mode === viewMode) return;
+    setViewMode(mode);
+    if (mode === 'list') refetch(); else boardRefetch();
+  };
+
+  const closeForm = useCallback(() => {
+    setShowForm(false);
+    setEditingTask(null);
+  }, []);
+
+  const openCreateForm = () => {
+    setEditingTask(null);
+    setShowForm(true);
+  };
 
   const handleCreateOrUpdate = async (data) => {
+    // 错误交由 TaskForm 内联展示
+    if (editingTask) {
+      await tasksApi.update(editingTask.id, data);
+    } else {
+      await tasksApi.create(data);
+    }
+    closeForm();
+    refreshAll();
+  };
+
+  const handleDelete = async (task) => {
+    if (!confirm(`确定删除任务「${task.title}」？子任务和进展记录也会一并删除。`)) return;
     try {
-      if (editingTask) {
-        await tasksApi.update(editingTask.id, data);
-      } else {
-        await tasksApi.create(data);
-      }
-      setShowForm(false);
-      setEditingTask(null);
-      refetch();
-      refetchSummary();
-      if (viewMode === 'kanban' || viewMode === 'calendar') kanbanRefetch();
-      refetchTags();
+      await tasksApi.delete(task.id);
+      setSelectedIds((prev) => prev.filter((id) => id !== task.id));
+      closeForm();
+      refreshAll();
     } catch (err) {
       alert(err.message);
     }
@@ -72,9 +176,7 @@ export default function Dashboard() {
   const handleStatusChange = async (id, status) => {
     try {
       await tasksApi.update(id, { status });
-      refetch();
-      refetchSummary();
-      if (viewMode === 'kanban' || viewMode === 'calendar') kanbanRefetch();
+      refreshAll();
     } catch (err) {
       alert(err.message);
     }
@@ -92,10 +194,7 @@ export default function Dashboard() {
     try {
       await tasksApi.batch({ action, ids: selectedIds, value });
       setSelectedIds([]);
-      refetch();
-      refetchSummary();
-      if (viewMode === 'kanban' || viewMode === 'calendar') kanbanRefetch();
-      refetchTags();
+      refreshAll();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -105,6 +204,12 @@ export default function Dashboard() {
 
   const handlePageChange = (page) => {
     setFilters((prev) => ({ ...prev, page }));
+  };
+
+  const handleStatusNav = (status) => {
+    if (viewMode !== 'list') setViewMode('list');
+    setFilters((prev) => ({ ...prev, status, page: 1 }));
+    setIsMobileMenuOpen(false);
   };
 
   const handleExport = async () => {
@@ -125,38 +230,33 @@ export default function Dashboard() {
   };
 
   const handleImport = async (e) => {
-    const file = e.target.files[0];
+    const input = e.target;
+    const file = input.files[0];
+    input.value = ''; // reset，允许重复选择同一个文件
     if(!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = JSON.parse(event.target.result);
-        if(!confirm('确定要导入这个备份文件吗？这将覆盖当前的所有数据。')) {
-          e.target.value = null;
-          return;
-        }
-        await backupApi.import(data);
-        alert('导入成功');
-        window.location.reload();
-      } catch(err) {
-        alert('导入失败: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = null; // reset
+    try {
+      const data = JSON.parse(await file.text());
+      if(!confirm('确定要导入这个备份文件吗？这将覆盖当前的所有数据。')) return;
+      await backupApi.import(data);
+      alert('导入成功');
+      window.location.reload();
+    } catch(err) {
+      alert('导入失败: ' + err.message);
+    }
   };
 
-  // Summary counts (use kanban tasks when in kanban or calendar mode for accurate totals)
-  const activeTasks = (viewMode === 'kanban' || viewMode === 'calendar') ? kanbanTasks : tasks;
-  
   // Header counts using summary API to get accurate global data
-  const todoCnt = summary?.by_status?.todo || 0;
-  const inProgressCnt = summary?.by_status?.in_progress || 0;
-  const doneCnt = summary?.by_status?.done || 0;
-  const totalCnt = summary?.total || 0;
+  const todayFocusCount = (agenda?.tasks?.length || 0) + (agenda?.in_progress_others?.length || 0);
+  const counts = {
+    today_focus: todayFocusCount,
+    total: summary?.total || 0,
+    todo: summary?.by_status?.todo || 0,
+    in_progress: summary?.by_status?.in_progress || 0,
+    done: summary?.by_status?.done || 0,
+  };
 
   return (
-    <div className={`dashboard ${viewMode === 'kanban' || viewMode === 'calendar' ? 'kanban-mode' : ''}`}>
+    <div className={`dashboard ${isBoardMode ? 'kanban-mode' : ''}`}>
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)} />
@@ -166,55 +266,51 @@ export default function Dashboard() {
       <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
           <div className="brand">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="brand-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="brand-icon">
               <path d="M9 11l3 3L22 4" />
               <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
             </svg>
-            <span>AgentTODO</span>
+            <div className="brand-copy">
+              <span className="brand-name">AgentTODO</span>
+              <span className="brand-sub">TASK LEDGER · 紙</span>
+            </div>
           </div>
         </div>
 
         <nav className="sidebar-nav">
-          <button className={`nav-item ${filters.status === '' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: '', page: 1 })}>
-            <span className="nav-icon">📋</span>
-            <span>全部任务</span>
-            <span className="nav-badge">{totalCnt}</span>
-          </button>
-          <button className={`nav-item ${filters.status === 'todo' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: 'todo', page: 1 })}>
-            <span className="nav-icon">○</span>
-            <span>待办</span>
-            {todoCnt > 0 && <span className="nav-badge">{todoCnt}</span>}
-          </button>
-          <button className={`nav-item ${filters.status === 'in_progress' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: 'in_progress', page: 1 })}>
-            <span className="nav-icon">◐</span>
-            <span>进行中</span>
-            {inProgressCnt > 0 && <span className="nav-badge">{inProgressCnt}</span>}
-          </button>
-          <button className={`nav-item ${filters.status === 'done' ? 'active' : ''}`} onClick={() => setFilters({ ...filters, status: 'done', page: 1 })}>
-            <span className="nav-icon">●</span>
-            <span>已完成</span>
-            {doneCnt > 0 && <span className="nav-badge">{doneCnt}</span>}
-          </button>
+          {STATUS_NAV.map((item) => (
+            <button
+              key={item.value || 'all'}
+              className={`nav-item ${activeStatus === item.value ? 'active' : ''}`}
+              onClick={() => handleStatusNav(item.value)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span>{item.label}</span>
+              {(item.value === '' || counts[item.countKey] > 0) && (
+                <span className="nav-badge">{counts[item.countKey]}</span>
+              )}
+            </button>
+          ))}
         </nav>
 
         <div className="sidebar-section">
           <button className="nav-item" onClick={() => setShowTags(!showTags)}>
-            <span className="nav-icon">🏷️</span>
+            <span className="nav-icon">#</span>
             <span>标签管理</span>
             <span className="nav-arrow">{showTags ? '▾' : '▸'}</span>
           </button>
-          {showTags && <TagManager tags={tags} onRefresh={() => { refetchTags(); refetch(); }} />}
+          {showTags && <TagManager tags={tags} onRefresh={refreshAll} />}
         </div>
 
         <div className="sidebar-footer">
           <div className="user-info">
-            <div className="user-avatar">📋</div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span className="user-name">本地用户</span>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <button className="btn-icon-sm" onClick={handleExport} title="导出全量备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导出</button>
-                <button className="btn-icon-sm" onClick={() => fileInputRef.current?.click()} title="导入全量备份" style={{ fontSize: '11px', padding: '0 4px', border: '1px solid var(--border)' }}>导入</button>
-                <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" style={{ display: 'none' }} />
+            <div className="user-avatar">紙</div>
+            <div className="user-meta">
+              <span className="user-name">本地工作区</span>
+              <div className="backup-actions">
+                <button className="btn-icon-sm backup-btn" onClick={handleExport} title="导出全量备份">导出备份</button>
+                <button className="btn-icon-sm backup-btn" onClick={() => fileInputRef.current?.click()} title="导入全量备份">导入备份</button>
+                <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json,application/json" style={{ display: 'none' }} />
               </div>
             </div>
           </div>
@@ -224,47 +320,90 @@ export default function Dashboard() {
       {/* Main Content */}
       <main className="main-content">
         <div className="main-header">
-          {/* Mobile Menu Button */}
-          <button 
-            className="mobile-menu-btn" 
-            onClick={() => setIsMobileMenuOpen(true)}
-            title="打开菜单"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="12" x2="21" y2="12"></line>
-              <line x1="3" y1="6" x2="21" y2="6"></line>
-              <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-          </button>
-
-          {/* Brand inline — only shows in full screen mode */}
-          {(viewMode === 'kanban' || viewMode === 'calendar') && (
-            <div className="header-brand">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="brand-icon">
-                <path d="M9 11l3 3L22 4" />
-                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+          <div className="header-left">
+            {/* Mobile Menu Button */}
+            <button
+              className="mobile-menu-btn"
+              onClick={() => setIsMobileMenuOpen(true)}
+              title="打开菜单"
+              aria-label="打开菜单"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
               </svg>
-            </div>
-          )}
-          <div>
-            <h1>我的任务</h1>
-            <div className="stats-row">
-              <span className="stat"><span className="stat-dot todo"></span>待办 {todoCnt}</span>
-              <span className="stat"><span className="stat-dot in-progress"></span>进行中 {inProgressCnt}</span>
-              <span className="stat"><span className="stat-dot done"></span>已完成 {doneCnt}</span>
+            </button>
+
+            {/* Brand inline — only shows in full screen mode */}
+            {isBoardMode && (
+              <div className="header-brand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="brand-icon">
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                </svg>
+              </div>
+            )}
+            <div className="header-heading">
+              <div className="header-eyebrow">
+                <span>AGENT WORKSPACE · 任务台账</span>
+                <span
+                  className={`sse-status ${sseConnected ? 'online' : 'offline'}`}
+                  title={sseConnected ? 'SSE 实时流已连接：AI / CLI 变更将自动同步' : '正在连接实时流...'}
+                >
+                  <span className="sse-dot" />
+                  {sseConnected ? '实时同步' : '连接中'}
+                </span>
+              </div>
+              <div className="header-title-row">
+                <h1>{isTodayMode ? '今日台账' : '我的任务'}</h1>
+                <div className="stats-row">
+                  <span className="stat">
+                    <span className="metric-value">{counts.todo}</span>
+                    <span className="metric-label">待办</span>
+                  </span>
+                  <span className="stat">
+                    <span className="metric-value">{counts.in_progress}</span>
+                    <span className="metric-label">进行中</span>
+                  </span>
+                  <span className="stat">
+                    <span className="metric-value">{counts.done}</span>
+                    <span className="metric-label">已完成</span>
+                  </span>
+                  {summary?.overdue > 0 && (
+                    <span className="stat stat-overdue">
+                      <span className="metric-value">{summary.overdue}</span>
+                      <span className="metric-label">逾期</span>
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           <div className="header-actions">
-            {/* Space holder for kanban mode */}
             {/* Theme toggle */}
-            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换到日间模式' : '切换到夜间模式'}>
-              {theme === 'dark' ? '☀️' : '🌙'}
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? '切换到宣纸日间模式' : '切换到墨色夜间模式'}
+              aria-label={theme === 'dark' ? '切换到宣纸日间模式' : '切换到墨色夜间模式'}
+            >
+              {theme === 'dark' ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                </svg>
+              )}
             </button>
             {/* View mode toggle */}
             <div className="view-toggle">
               <button
                 className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
-                onClick={() => setViewMode('list')}
+                onClick={() => switchView('list')}
                 title="列表视图"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -275,7 +414,7 @@ export default function Dashboard() {
               </button>
               <button
                 className={`view-toggle-btn ${viewMode === 'kanban' ? 'active' : ''}`}
-                onClick={() => setViewMode('kanban')}
+                onClick={() => switchView('kanban')}
                 title="看板视图"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -286,7 +425,7 @@ export default function Dashboard() {
               </button>
               <button
                 className={`view-toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
-                onClick={() => setViewMode('calendar')}
+                onClick={() => switchView('calendar')}
                 title="日历视图"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -297,15 +436,20 @@ export default function Dashboard() {
                 </svg>
               </button>
             </div>
-            <button className="btn btn-primary" onClick={() => { setEditingTask(null); setShowForm(true); }}>
+            <button className="btn btn-primary" onClick={openCreateForm}>
               + 新建任务
             </button>
           </div>
         </div>
 
-        {/* Filter bar — only in list mode */}
-        {viewMode === 'list' && (
-          <FilterBar filters={filters} onFilterChange={setFilters} tags={tags} />
+        {!isTodayMode && (
+          <FilterBar filters={filters} onFilterChange={setFilters} tags={tags} showStatus={!isBoardMode} />
+        )}
+
+        {isBoardMode && boardPagination.total > boardTasks.length && (
+          <div className="board-limit-hint">
+            当前仅显示前 {boardTasks.length} / {boardPagination.total} 个任务，可通过搜索或筛选缩小范围。
+          </div>
         )}
 
         {/* Batch actions */}
@@ -320,7 +464,18 @@ export default function Dashboard() {
         )}
 
         {/* Task views */}
-        {viewMode === 'list' ? (
+        {isTodayMode ? (
+          <TodayAgenda
+            agenda={agenda}
+            loading={agendaLoading}
+            onEdit={handleEdit}
+            onStatusChange={handleStatusChange}
+            onSelect={handleSelect}
+            selectedIds={selectedIds}
+            onSubtaskChange={refreshAll}
+            onCreate={openCreateForm}
+          />
+        ) : viewMode === 'list' ? (
           <>
             <div className="task-list">
               {loading && tasks.length === 0 && (
@@ -331,14 +486,22 @@ export default function Dashboard() {
               )}
 
               {!loading && tasks.length === 0 && (
-                <div className="empty-state">
-                  <div className="empty-icon">📝</div>
-                  <h3>还没有任务</h3>
-                  <p>点击「新建任务」按钮开始添加你的第一个任务吧！</p>
-                  <button className="btn btn-primary" onClick={() => { setEditingTask(null); setShowForm(true); }}>
-                    + 新建任务
-                  </button>
-                </div>
+                filters.search || filters.status || filters.priority || filters.tag ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">◇</div>
+                    <h3>没有符合条件的任务</h3>
+                    <p>试试调整搜索关键词或筛选条件。</p>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">○</div>
+                    <h3>还没有任务</h3>
+                    <p>点击「新建任务」按钮开始添加你的第一个任务。</p>
+                    <button className="btn btn-primary" onClick={openCreateForm}>
+                      + 新建任务
+                    </button>
+                  </div>
+                )
               )}
 
               {tasks.map((task) => (
@@ -349,6 +512,7 @@ export default function Dashboard() {
                   onStatusChange={handleStatusChange}
                   onSelect={handleSelect}
                   selected={selectedIds.includes(task.id)}
+                  onSubtaskChange={refreshAll}
                 />
               ))}
             </div>
@@ -376,33 +540,25 @@ export default function Dashboard() {
               </div>
             )}
           </>
-        ) : viewMode === 'kanban' ? (
+        ) : (
           <div className="kanban-wrapper">
-            {kanbanLoading && kanbanTasks.length === 0 ? (
+            {boardLoading && boardTasks.length === 0 ? (
               <div className="loading-state">
                 <div className="spinner"></div>
                 <p>加载中...</p>
               </div>
-            ) : (
+            ) : viewMode === 'kanban' ? (
               <KanbanBoard
-                tasks={kanbanTasks}
+                tasks={boardTasks}
                 onEdit={handleEdit}
                 onStatusChange={handleStatusChange}
                 onSelect={handleSelect}
                 selectedIds={selectedIds}
+                onSubtaskChange={refreshAll}
               />
-            )}
-          </div>
-        ) : (
-          <div className="kanban-wrapper">
-            {kanbanLoading && kanbanTasks.length === 0 ? (
-              <div className="loading-state">
-                <div className="spinner"></div>
-                <p>加载中...</p>
-              </div>
             ) : (
               <CalendarBoard
-                tasks={kanbanTasks}
+                tasks={boardTasks}
                 onEdit={handleEdit}
               />
             )}
@@ -413,10 +569,14 @@ export default function Dashboard() {
       {/* Modal */}
       {showForm && (
         <TaskForm
+          key={editingTask?.id ?? 'new'}
           task={editingTask}
           tags={tags}
           onSubmit={handleCreateOrUpdate}
-          onCancel={() => { setShowForm(false); setEditingTask(null); }}
+          onCancel={closeForm}
+          onDelete={handleDelete}
+          onChanged={refreshAll}
+          liveVersion={liveVersion}
         />
       )}
     </div>

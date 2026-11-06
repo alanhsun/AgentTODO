@@ -4,10 +4,39 @@ name: Publish Docker Image
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch: # 允许在 GitHub 网页上手动点击运行
 
 jobs:
+  # 第0步：先跑测试与构建检查，测试不通过就不发布镜像
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run server tests
+        run: npm test
+
+      - name: Lint & build client
+        run: |
+          npm run lint --workspace client
+          npm run build:client
+
   build-and-push:
+    needs: test
+    # PR 只跑测试，不推送镜像
+    if: github.event_name != 'pull_request'
     # 运行在 GitHub 提供的一台免费的 Ubuntu 虚拟机上
     runs-on: ubuntu-latest
 
@@ -16,7 +45,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 第2步：安装 Docker 的构建工具（用来打包镜像）
+      # 第2步：安装 QEMU 与 Docker 的构建工具（用来打包 amd64 + arm64 多架构镜像，支持树莓派）
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -34,6 +66,11 @@ jobs:
         with:
           context: .
           push: true
-          # 镜像的名字将是：你的用户名/agenttodo:latest
+          platforms: linux/amd64,linux/arm64
+          # 镜像的名字将是：你的用户名/agenttodo:latest，同时附带 commit sha 标签便于回滚
           # 注意：Docker 镜像名称必须全部小写，且不能包含特殊字符
-          tags: alansundy/agenttodo:latest
+          tags: |
+            alansundy/agenttodo:latest
+            alansundy/agenttodo:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

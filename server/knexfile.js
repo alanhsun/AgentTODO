@@ -1,39 +1,48 @@
 const path = require('path');
+const config = require('./src/config');
+
+/**
+ * SQLite 默认关闭外键约束，这会导致迁移中声明的 ON DELETE CASCADE 完全失效
+ * （删除任务后子任务/笔记/标签关联会变成孤儿数据）。
+ * 因此每个新连接建立时都必须显式开启。
+ */
+function afterCreate(conn, done) {
+  conn.run('PRAGMA foreign_keys = ON', done);
+}
+
+const base = {
+  client: 'sqlite3',
+  useNullAsDefault: true,
+  migrations: {
+    directory: path.join(__dirname, 'migrations'),
+  },
+};
 
 module.exports = {
   development: {
-    client: 'sqlite3',
+    ...base,
     connection: {
-      filename: path.join(__dirname, 'data', 'tasks.db')
+      filename: config.dbPath,
     },
-    useNullAsDefault: true,
-    migrations: {
-      directory: path.join(__dirname, 'migrations')
-    }
+    pool: { afterCreate },
   },
   test: {
-    client: 'sqlite3',
+    ...base,
     connection: {
-      filename: ':memory:'
-    },
-    useNullAsDefault: true,
-    migrations: {
-      directory: path.join(__dirname, 'migrations')
+      filename: ':memory:',
     },
     pool: {
       min: 1,
       max: 1,
       idleTimeoutMillis: 360000 * 1000,
-    }
+      afterCreate,
+    },
   },
   production: {
-    client: 'sqlite3',
+    ...base,
     connection: {
-      filename: process.env.DB_PATH || '/data/tasks.db'
+      filename: process.env.DB_PATH || '/data/tasks.db',
     },
-    useNullAsDefault: true,
-    migrations: {
-      directory: path.join(__dirname, 'migrations')
-    }
-  }
+    pool: { afterCreate },
+  },
 };

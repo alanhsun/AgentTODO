@@ -38,12 +38,27 @@ describe('CreateTaskSkill 测试 (创建任务技能)', () => {
       title: '买咖啡',
       priority: 'high',
       recurrence: 'none' // 技能自带的默认值
-    });
+    }, expect.objectContaining({ timeout: expect.any(Number) })); // 第三个参数是请求配置（超时）
 
     // 检查二：执行结果是不是我们想要的
     expect(result).toEqual({
       message: '任务创建成功',
       data: mockResponse.data
+    });
+  });
+
+  test('后端返回校验错误时，把后端给出的具体原因带回给 AI', async () => {
+    const error = new Error('Request failed with status code 400');
+    error.response = { status: 400, data: { errors: ['Priority must be one of: low, medium, high, urgent'] } };
+    axios.post.mockRejectedValue(error);
+
+    const result = await skill.execute({ title: '买咖啡', priority: 'super' });
+    expect(result).toEqual({
+      status: 'error',
+      skill: 'create_task',
+      http_status: 400,
+      message: 'Priority must be one of: low, medium, high, urgent',
+      details: ['Priority must be one of: low, medium, high, urgent'],
     });
   });
 });
